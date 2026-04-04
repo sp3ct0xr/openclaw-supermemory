@@ -112,6 +112,22 @@ export function registerSettingsTool(
 						}),
 					})
 
+					// Validate chunkSize: must be -1 (default) or >= 64
+					if (
+						params.chunkSize !== undefined &&
+						params.chunkSize !== -1 &&
+						(params.chunkSize < 64 || params.chunkSize > 8192)
+					) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "Invalid chunkSize. Use -1 for default, or a value between 64 and 8192.",
+								},
+							],
+						}
+					}
+
 					const updated = await client.updateSettings({
 						...(params.filterPrompt !== undefined && {
 							filterPrompt: params.filterPrompt,

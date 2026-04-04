@@ -81,7 +81,10 @@ export default {
 		registerProfileTool(api, client, cfg)
 		registerSettingsTool(api, client, cfg)
 
-		// Sync org-level settings from plugin config on startup
+		// Sync org-level settings from plugin config → Supermemory on startup.
+		// Note: this is one-way (config → server). If settings are changed via
+		// the supermemory_settings tool mid-session, cfg remains stale.
+		// This is fine because nothing reads cfg.filterPrompt after startup.
 		if (cfg.filterPrompt !== undefined || cfg.shouldLLMFilter !== undefined) {
 			client
 				.updateSettings({

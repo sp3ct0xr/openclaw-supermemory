@@ -664,8 +664,10 @@ export class SupermemoryClient {
 	}> {
 		log.debugRequest("settings.get", {})
 		const response = await this.client.settings.get()
+		const trunc = (s: string) =>
+			s.length > 50 ? `${s.slice(0, 50)}…` : s
 		log.debugResponse("settings.get", {
-			filterPrompt: response.filterPrompt ? `${response.filterPrompt.slice(0, 50)}…` : null,
+			filterPrompt: response.filterPrompt ? trunc(response.filterPrompt) : null,
 			shouldLLMFilter: response.shouldLLMFilter,
 			chunkSize: response.chunkSize,
 		})
@@ -686,10 +688,12 @@ export class SupermemoryClient {
 		shouldLLMFilter?: boolean | null
 		chunkSize?: number | null
 	}> {
+		const trunc = (s: string) =>
+			s.length > 50 ? `${s.slice(0, 50)}…` : s
 		log.debugRequest("settings.update", {
 			...(params.filterPrompt !== undefined && {
 				filterPrompt: params.filterPrompt
-					? `${params.filterPrompt.slice(0, 50)}…`
+					? trunc(params.filterPrompt)
 					: params.filterPrompt,
 			}),
 			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
@@ -703,7 +707,7 @@ export class SupermemoryClient {
 		log.debugResponse("settings.update", {
 			...(response.updated.filterPrompt !== undefined && {
 				filterPrompt: response.updated.filterPrompt
-					? `${response.updated.filterPrompt.slice(0, 50)}…`
+					? trunc(response.updated.filterPrompt)
 					: response.updated.filterPrompt,
 			}),
 			...(response.updated.shouldLLMFilter !== undefined && {
