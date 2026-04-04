@@ -530,7 +530,14 @@ export class SupermemoryClient {
 			}
 		}
 
-		// No high-confidence match — fall back to deleting the best match only
+		// No high-confidence match — check minimum threshold before fallback
+		const MIN_THRESHOLD = 0.50
+		if (results[0].similarity !== undefined && results[0].similarity < MIN_THRESHOLD) {
+			return {
+				success: false,
+				message: `No confident match found. Top result only scored ${Math.round((results[0].similarity || 0) * 100)}%.`,
+			}
+		}
 		const target = results[0]
 		await this.deleteMemory(target.id, containerTag)
 
