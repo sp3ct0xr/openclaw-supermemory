@@ -185,18 +185,9 @@ export function buildRecallHandler(
 			`recalling for turn ${turn} (profile: ${includeProfile}, newSession: ${isNewSession})`,
 		)
 
-	try {
+		try {
 			const profile = await client.getProfile(
 				isNewSession ? undefined : query,
-			)
-
-			// Filter out low-relevance search results from profile response
-			// Threshold 0.5 removes noise while keeping moderately relevant context
-			const PROFILE_RELEVANCE_THRESHOLD = 0.5
-			const filteredSearch = profile.searchResults.filter(
-				(r) =>
-					r.similarity === undefined ||
-					r.similarity >= PROFILE_RELEVANCE_THRESHOLD,
 			)
 
 			const memoryContext = formatContext(

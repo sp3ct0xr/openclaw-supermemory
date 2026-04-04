@@ -239,6 +239,7 @@ export class SupermemoryClient {
 			includeFullDocs?: boolean
 			includeSummary?: boolean
 			chunkThreshold?: number
+			containerTags?: string[]
 		},
 	): Promise<DeepSearchResult[]> {
 		log.debugRequest("search.documents", {
@@ -246,6 +247,7 @@ export class SupermemoryClient {
 			limit,
 			rerank: opts?.rerank,
 			rewriteQuery: opts?.rewriteQuery,
+			containerTags: opts?.containerTags,
 		})
 
 		const response = await this.client.search.documents({
@@ -253,6 +255,7 @@ export class SupermemoryClient {
 			limit,
 			rerank: opts?.rerank ?? true,
 			rewriteQuery: opts?.rewriteQuery ?? true,
+			...(opts?.containerTags && { containerTags: opts.containerTags }),
 			...(opts?.filters && { filters: opts.filters as any }),
 			...(opts?.includeFullDocs !== undefined && { includeFullDocs: opts.includeFullDocs }),
 			...(opts?.includeSummary !== undefined && { includeSummary: opts.includeSummary }),

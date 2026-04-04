@@ -17,12 +17,12 @@ function formatMemoryResult(r: SearchResult, i: number): string {
 	const contextParts: string[] = []
 	if (r.parents?.length) {
 		contextParts.push(
-			`   ↑ ${r.parents.length} parent(s): ${r.parents.map((p) => `"${p.memory.slice(0, 60)}" (${p.relation})`).join(", ")}`,
+			`   ↑ ${r.parents.length} parent(s): ${r.parents.map((p) => `"${p.memory.length > 60 ? `${p.memory.slice(0, 60)}…` : p.memory}" (${p.relation})`).join(", ")}`,
 		)
 	}
 	if (r.children?.length) {
 		contextParts.push(
-			`   ↓ ${r.children.length} child(ren): ${r.children.map((c) => `"${c.memory.slice(0, 60)}" (${c.relation})`).join(", ")}`,
+			`   ↓ ${r.children.length} child(ren): ${r.children.map((c) => `"${c.memory.length > 60 ? `${c.memory.slice(0, 60)}…` : c.memory}" (${c.relation})`).join(", ")}`,
 		)
 	}
 	const context =
@@ -124,6 +124,9 @@ export function registerSearchTool(
 							rewriteQuery: true,
 							includeSummary: true,
 							...(filters && { filters }),
+							...(params.containerTag && {
+								containerTags: [params.containerTag],
+							}),
 						},
 					)
 
