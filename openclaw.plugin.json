@@ -42,7 +42,7 @@
 		"entityContext": {
 			"label": "Entity Context",
 			"placeholder": "Custom instructions for memory extraction...",
-			"help": "Instructions that guide what memories are extracted from conversations. Leave blank to use the built-in default.",
+			"help": "Instructions for server-side atomic fact extraction. Default prompt decomposes conversations into individual facts with categories and confidence levels. Set empty to disable extraction (cheaper but lower quality). ⚠️ Non-empty = single-add API path (~10 calls/session vs 1 batch call).",
 			"advanced": true
 		},
 		"debug": {
@@ -63,6 +63,11 @@
 		"customContainerInstructions": {
 			"label": "Container Instructions",
 			"help": "Instructions for AI on how to route memories to custom containers",
+			"advanced": true
+		},
+		"categoryRouting": {
+			"label": "Category Routing",
+			"help": "Route memories to category-specific containers (preferences, facts, decisions, etc.). ⚠️ Multiplies search API calls by 6x. Auto-disabled when Custom Containers are defined.",
 			"advanced": true
 		}
 	},
@@ -91,7 +96,8 @@
 					"required": ["tag", "description"]
 				}
 			},
-			"customContainerInstructions": { "type": "string" }
+			"customContainerInstructions": { "type": "string" },
+			"categoryRouting": { "type": "boolean" }
 		},
 		"required": []
 	}
