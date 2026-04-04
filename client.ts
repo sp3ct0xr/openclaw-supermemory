@@ -656,6 +656,50 @@ export class SupermemoryClient {
 		return { id: result.id, action: "created" }
 	}
 
+	/** Get org-level Supermemory settings. */
+	async getSettings(): Promise<{
+		filterPrompt: string | null
+		shouldLLMFilter: boolean | null
+		chunkSize: number | null
+	}> {
+		log.debugRequest("settings.get", {})
+		const response = await this.client.settings.get()
+		log.debugResponse("settings.get", {
+			filterPrompt: response.filterPrompt ? `${response.filterPrompt.slice(0, 50)}…` : null,
+			shouldLLMFilter: response.shouldLLMFilter,
+			chunkSize: response.chunkSize,
+		})
+		return {
+			filterPrompt: response.filterPrompt ?? null,
+			shouldLLMFilter: response.shouldLLMFilter ?? null,
+			chunkSize: response.chunkSize ?? null,
+		}
+	}
+
+	/** Update org-level Supermemory settings. */
+	async updateSettings(params: {
+		filterPrompt?: string | null
+		shouldLLMFilter?: boolean | null
+		chunkSize?: number | null
+	}): Promise<{
+		filterPrompt?: string | null
+		shouldLLMFilter?: boolean | null
+		chunkSize?: number | null
+	}> {
+		log.debugRequest("settings.update", params)
+		const response = await this.client.settings.update({
+			...(params.filterPrompt !== undefined && { filterPrompt: params.filterPrompt }),
+			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
+			...(params.chunkSize !== undefined && { chunkSize: params.chunkSize }),
+		})
+		log.debugResponse("settings.update", response.updated)
+		return {
+			filterPrompt: response.updated.filterPrompt,
+			shouldLLMFilter: response.updated.shouldLLMFilter,
+			chunkSize: response.updated.chunkSize,
+		}
+	}
+
 	getContainerTag(): string {
 		return this.containerTag
 	}

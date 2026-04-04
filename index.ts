@@ -18,6 +18,7 @@ import { registerForgetTool } from "./tools/forget.ts"
 import { registerProfileTool } from "./tools/profile.ts"
 import { registerSearchTool } from "./tools/search.ts"
 import { registerStoreTool } from "./tools/store.ts"
+import { registerSettingsTool } from "./tools/settings.ts"
 import { registerUpdateTool } from "./tools/update.ts"
 
 try {
@@ -78,6 +79,18 @@ export default {
 		registerUpdateTool(api, client, cfg)
 		registerForgetTool(api, client, cfg)
 		registerProfileTool(api, client, cfg)
+		registerSettingsTool(api, client, cfg)
+
+		// Sync org-level settings from plugin config on startup
+		if (cfg.filterPrompt !== undefined || cfg.shouldLLMFilter !== undefined) {
+			client
+				.updateSettings({
+					...(cfg.filterPrompt !== undefined && { filterPrompt: cfg.filterPrompt }),
+					...(cfg.shouldLLMFilter !== undefined && { shouldLLMFilter: cfg.shouldLLMFilter }),
+				})
+				.then(() => api.logger.info("supermemory: org settings synced from config"))
+				.catch((err) => api.logger.warn(`supermemory: failed to sync org settings: ${err}`))
+		}
 
 		if (cfg.autoRecall) {
 			const recallHandler = buildRecallHandler(client, cfg)
