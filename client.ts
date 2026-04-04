@@ -58,17 +58,30 @@ export class SupermemoryClient {
 
 	/**
 	 * Resolve a container tag based on memory category.
-	 * Categories with a suffix get routed to `{base}_{suffix}`,
-	 * otherwise returns the base container tag.
+	 * When `routingEnabled` is true and a category has a suffix,
+	 * returns `{base}_{suffix}`. Otherwise returns the base tag.
 	 */
 	resolveContainerTag(
 		category?: MemoryCategory,
 		explicitTag?: string,
+		routingEnabled = false,
 	): string {
 		if (explicitTag) return explicitTag
-		if (!category) return this.containerTag
+		if (!routingEnabled || !category) return this.containerTag
 		const suffix = CATEGORY_CONTAINER_SUFFIX[category]
 		return suffix ? `${this.containerTag}_${suffix}` : this.containerTag
+	}
+
+	/**
+	 * Return all category container tags (for cross-container search).
+	 * Only meaningful when category routing is enabled.
+	 */
+	getCategoryContainerTags(): string[] {
+		const tags = new Set<string>([this.containerTag])
+		for (const suffix of Object.values(CATEGORY_CONTAINER_SUFFIX)) {
+			if (suffix) tags.add(`${this.containerTag}_${suffix}`)
+		}
+		return [...tags]
 	}
 
 	async addMemory(
@@ -372,7 +385,7 @@ export class SupermemoryClient {
 		similarityThreshold?: number
 	}): Promise<{ id: string; action: "created" | "updated"; version?: number }> {
 		const tag = params.containerTag ?? this.containerTag
-		const threshold = params.similarityThreshold ?? 0.85
+		const threshold = params.similarityThreshold ?? 0.90
 
 		// Search for existing similar memories
 		try {

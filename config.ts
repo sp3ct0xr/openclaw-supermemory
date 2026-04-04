@@ -21,6 +21,10 @@ export type SupermemoryConfig = {
 	enableCustomContainerTags: boolean
 	customContainers: CustomContainer[]
 	customContainerInstructions: string
+	/** Route memories to category-specific containers (e.g. {base}_preferences).
+	 *  Default: false — all memories go to the base container.
+	 *  Enable only after verifying it doesn't conflict with custom containers. */
+	categoryRouting: boolean
 }
 
 const ALLOWED_KEYS = [
@@ -36,6 +40,7 @@ const ALLOWED_KEYS = [
 	"enableCustomContainerTags",
 	"customContainers",
 	"customContainerInstructions",
+	"categoryRouting",
 ]
 
 function assertAllowedKeys(
@@ -132,6 +137,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 			typeof cfg.customContainerInstructions === "string"
 				? cfg.customContainerInstructions
 				: "",
+		categoryRouting: (cfg.categoryRouting as boolean) ?? false,
 	}
 }
 
@@ -162,6 +168,7 @@ export const supermemoryConfigSchema = {
 				},
 			},
 			customContainerInstructions: { type: "string" },
+			categoryRouting: { type: "boolean" },
 		},
 	},
 	parse: parseConfig,

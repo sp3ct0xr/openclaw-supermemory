@@ -33,7 +33,11 @@ export function detectCategory(text: string): MemoryCategory {
 		return "decision"
 	if (/\+\d{10,}|@[\w.-]+\.\w+|\bis called\b|\bmy name\b/.test(lower))
 		return "entity"
-	if (/\b(?:is|are|has|have|works? (?:at|for|with))\b/.test(lower))
+	if (
+		/\b(?:(?:my|i|we|our) (?:is|are|has|have|work|live|speak|use|study|teach))|(?:works? (?:at|for|with))|(?:born in|grew up|graduated)\b/.test(
+			lower,
+		)
+	)
 		return "fact"
 	return "other"
 }

@@ -59,6 +59,7 @@ export function registerStoreTool(
 				const routedTag = client.resolveContainerTag(
 					category,
 					params.containerTag,
+					cfg.categoryRouting,
 				)
 
 				log.debug(
