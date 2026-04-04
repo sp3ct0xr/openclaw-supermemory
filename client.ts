@@ -1,3 +1,4 @@
+import fs from "node:fs"
 import Supermemory from "supermemory"
 import {
 	sanitizeContent,
@@ -31,6 +32,28 @@ export type SearchResult = {
 	parents?: VersionChainContext[]
 	/** Child memories in the version chain */
 	children?: VersionChainContext[]
+}
+
+export type DocumentInfo = {
+	id: string
+	content: string | null
+	summary: string | null
+	title: string | null
+	type: string
+	status: string
+	metadata: Record<string, unknown> | null
+	url?: string | null
+	createdAt: string
+	updatedAt: string
+}
+
+export type ProcessingDocument = {
+	id: string
+	title: string | null
+	type: string
+	status: string
+	createdAt: string
+	updatedAt: string
 }
 
 export type DeepSearchResult = {
@@ -721,6 +744,166 @@ export class SupermemoryClient {
 			filterPrompt: response.updated.filterPrompt,
 			shouldLLMFilter: response.updated.shouldLLMFilter,
 			chunkSize: response.updated.chunkSize,
+		}
+	}
+
+	/** Add raw content directly to Supermemory, bypassing sanitizeContent.
+	 *  Used for base64 payloads that would be corrupted by the 100k char truncation. */
+	async addRawContent(params: {
+		content: string
+		containerTag?: string
+		customId?: string
+		entityContext?: string
+		metadata?: Record<string, string | number | boolean>
+	}): Promise<{ id: string }> {
+		const tag = params.containerTag ?? this.containerTag
+		log.debugRequest("add.raw", {
+			contentLength: params.content.length,
+			containerTag: tag,
+			customId: params.customId,
+		})
+		const result = await this.client.add({
+			content: params.content,
+			containerTag: tag,
+			...(params.customId && { customId: params.customId }),
+			...(params.entityContext && { entityContext: params.entityContext }),
+			...(params.metadata && { metadata: params.metadata }),
+		})
+		log.debugResponse("add.raw", { id: result.id })
+		return { id: result.id }
+	}
+
+	/** Upload a binary file for processing. */
+	async uploadFile(filePath: string, opts?: {
+		fileType?: string
+		mimeType?: string
+		metadata?: Record<string, string | number | boolean>
+	}): Promise<{ id: string; status: string }> {
+		log.debugRequest("documents.uploadFile", { filePath, ...opts })
+		const result = await this.client.documents.uploadFile({
+			file: fs.createReadStream(filePath),
+			...(opts?.fileType && { fileType: opts.fileType }),
+			...(opts?.mimeType && { mimeType: opts.mimeType }),
+			...(opts?.metadata && { metadata: JSON.stringify(opts.metadata) }),
+		})
+		log.debugResponse("documents.uploadFile", result)
+		return { id: result.id, status: result.status }
+	}
+
+	/** Get a document by ID. */
+	async getDocument(id: string): Promise<DocumentInfo> {
+		log.debugRequest("documents.get", { id })
+		const r = await this.client.documents.get(id)
+		log.debugResponse("documents.get", { id: r.id, status: r.status, type: r.type })
+		return {
+			id: r.id,
+			content: r.content,
+			summary: r.summary,
+			title: r.title,
+			type: r.type,
+			status: r.status,
+			metadata: (r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata))
+				? r.metadata as Record<string, unknown>
+				: null,
+			url: r.url,
+			createdAt: r.createdAt,
+			updatedAt: r.updatedAt,
+		}
+	}
+
+	/** Update a document's content or metadata. */
+	async updateDocument(id: string, params: {
+		content?: string
+		metadata?: Record<string, string | number | boolean | string[]>
+		customId?: string
+		containerTag?: string
+	}): Promise<{ id: string; status: string }> {
+		log.debugRequest("documents.update", {
+			id,
+			...(params.content !== undefined && {
+				contentLength: params.content.length,
+			}),
+			...(params.metadata && { metadataKeys: Object.keys(params.metadata) }),
+			...(params.customId && { customId: params.customId }),
+			...(params.containerTag && { containerTag: params.containerTag }),
+		})
+		const result = await this.client.documents.update(id, {
+			...(params.content && { content: params.content }),
+			...(params.metadata && { metadata: params.metadata }),
+			...(params.customId && { customId: params.customId }),
+			...(params.containerTag && { containerTag: params.containerTag }),
+		})
+		log.debugResponse("documents.update", result)
+		return { id: result.id, status: result.status }
+	}
+
+	/** Delete a single document by ID. */
+	async deleteDocument(id: string): Promise<{ success: boolean; error?: string }> {
+		log.debugRequest("documents.delete", { id })
+		try {
+			await this.client.documents.delete(id)
+			log.debug(`documents.delete: deleted ${id}`)
+			return { success: true }
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err)
+			log.warn(`documents.delete failed for ${id}: ${message}`)
+			return { success: false, error: message }
+		}
+	}
+
+	/** List documents currently being processed. */
+	async listProcessingDocuments(): Promise<{
+		documents: ProcessingDocument[]
+		totalCount: number
+	}> {
+		log.debugRequest("documents.listProcessing", {})
+		const response = await this.client.documents.listProcessing()
+		log.debugResponse("documents.listProcessing", { totalCount: response.totalCount })
+		return {
+			documents: response.documents.map((d) => ({
+				id: d.id,
+				title: d.title,
+				type: d.type,
+				status: d.status,
+				createdAt: d.createdAt,
+				updatedAt: d.updatedAt,
+			})),
+			totalCount: response.totalCount,
+		}
+	}
+
+	/** List documents with full SDK params (sort, order, filters, includeContent). */
+	async listDocuments(opts?: {
+		page?: number
+		limit?: number
+		sort?: "createdAt" | "updatedAt"
+		order?: "asc" | "desc"
+		includeContent?: boolean
+		containerTag?: string
+	}): Promise<{
+		documents: Array<Record<string, unknown>>
+		pagination: { currentPage: number; totalPages: number; totalItems: number }
+	}> {
+		const tag = opts?.containerTag ?? this.containerTag
+		log.debugRequest("documents.list", { tag, ...opts })
+		const response = await this.client.documents.list({
+			containerTags: [tag],
+			...(opts?.page && { page: opts.page }),
+			...(opts?.limit && { limit: opts.limit }),
+			...(opts?.sort && { sort: opts.sort }),
+			...(opts?.order && { order: opts.order }),
+			...(opts?.includeContent !== undefined && { includeContent: opts.includeContent }),
+		})
+		log.debugResponse("documents.list", { count: response.memories?.length ?? 0 })
+		return {
+			// SDK returns `memories` field from documents.list() — not `documents`.
+			// This is the SDK's naming convention, not a bug.
+			documents: (response.memories ?? []) as unknown as Array<Record<string, unknown>>,
+			pagination: {
+				currentPage: response.pagination?.currentPage ?? 1,
+				totalPages: response.pagination?.totalPages ?? 1,
+				totalItems: response.pagination?.totalItems ?? 0,
+			},
 		}
 	}
 

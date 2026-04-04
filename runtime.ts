@@ -113,9 +113,21 @@ export function buildPromptSection(params: {
 }): string[] {
 	const hasSearch = params.availableTools.has("supermemory_search")
 	const hasStore = params.availableTools.has("supermemory_store")
+	const hasUpdate = params.availableTools.has("supermemory_update")
 	const hasForget = params.availableTools.has("supermemory_forget")
 	const hasProfile = params.availableTools.has("supermemory_profile")
-	if (!hasSearch && !hasStore && !hasForget && !hasProfile) return []
+	const hasIngest = params.availableTools.has("supermemory_ingest")
+	const hasSettings = params.availableTools.has("supermemory_settings")
+	if (
+		!hasSearch &&
+		!hasStore &&
+		!hasUpdate &&
+		!hasForget &&
+		!hasProfile &&
+		!hasIngest &&
+		!hasSettings
+	)
+		return []
 
 	const lines: string[] = [
 		"## Memory (Supermemory)",
@@ -157,10 +169,39 @@ export function buildPromptSection(params: {
 			"",
 		)
 	}
+	if (hasUpdate) {
+		lines.push(
+			"### Updating memories",
+			"Use supermemory_update when a known fact needs to change (e.g. user moved cities, changed preferences, corrected a prior statement). This creates a version chain — the old memory is preserved as history, the new version becomes current.",
+			"",
+			"**Params:** Pass `memoryId` (direct) or `query` (search-then-update) + `newContent`. Optional: `eventDate`, `forgetAfter` (TTL), `forgetReason`.",
+			"**Update vs Store:** Store is for NEW information. Update is for CHANGING existing information. Store auto-deduplicates; Update creates explicit version history.",
+			"**Update vs Correction:** When the user says 'no, actually X' — use supermemory_store with category 'correction' (force-creates distinct entry). When you need to revise a specific known memory by ID — use supermemory_update.",
+			"",
+		)
+	}
 	if (hasForget) {
 		lines.push(
 			"### Forgetting memories",
-			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\". Provide a descriptive query or the memory ID to target the closest match.",
+			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\".",
+			"",
+			"**Params:** `memoryId` (direct delete) or `query` (search-then-delete the closest match). Optional: `reason` (audit trail), `containerTag`.",
+			"",
+		)
+	}
+	if (hasIngest) {
+		lines.push(
+			"### Ingesting content",
+			"Use supermemory_ingest to add external content to memory. Pass a URL or raw text — Supermemory auto-detects the format and extracts memories.",
+			"",
+			"**Params:** `content` (URL or text, required), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
+			"**Supported content:**",
+			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed) — just pass the URL",
+			"- Text: plaintext, markdown, HTML, JSON, CSV",
+			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
+			"",
+			"**Limits:** Text: ~100k chars (plugin sanitize). URLs: up to 10MB (Supermemory fetches server-side). Base64: sent raw up to 50MB (bypasses plugin sanitize).",
+			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
 			"",
 		)
 	}
@@ -168,6 +209,26 @@ export function buildPromptSection(params: {
 		lines.push(
 			"### Profile inspection",
 			"Use supermemory_profile to see a full summary of what is known about the user if you need an overview beyond what was auto-injected.",
+			"",
+			"**Params:** Optional `query` to scope profile search results. Optional `containerTag`.",
+			"",
+		)
+	}
+	if (params.availableTools.has("supermemory_documents")) {
+		lines.push(
+			"### Document management",
+			"Use supermemory_documents to inspect, browse, or delete ingested documents.",
+			"",
+			"**Actions:** `action: 'get'` + `documentId` to inspect a document (content, summary, status). `action: 'list'` to browse with `sort`/`order`/`page`/`limit`. `action: 'processing'` to see pipeline status. `action: 'delete'` + `documentId` to remove.",
+			"",
+		)
+	}
+	if (hasSettings) {
+		lines.push(
+			"### Platform settings",
+			"Use supermemory_settings to view or update org-level settings.",
+			"",
+			"**Params:** `action: 'get'` to view current settings. `action: 'update'` with `filterPrompt` (org-wide extraction prompt), `shouldLLMFilter` (toggle LLM filtering), `chunkSize` (memory granularity, -1 for default or 64-8192).",
 			"",
 		)
 	}
