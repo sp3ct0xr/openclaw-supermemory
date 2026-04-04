@@ -113,8 +113,9 @@ export function buildPromptSection(params: {
 }): string[] {
 	const hasSearch = params.availableTools.has("supermemory_search")
 	const hasStore = params.availableTools.has("supermemory_store")
+	const hasForget = params.availableTools.has("supermemory_forget")
 	const hasProfile = params.availableTools.has("supermemory_profile")
-	if (!hasSearch && !hasStore) return []
+	if (!hasSearch && !hasStore && !hasForget) return []
 
 	const lines: string[] = [
 		"## Memory (Supermemory)",
@@ -124,13 +125,13 @@ export function buildPromptSection(params: {
 		"### What is auto-injected",
 		"Your user profile (persistent facts and recent context) is automatically injected at the start of each session. This gives you baseline knowledge about the user without any tool calls.",
 		"",
-		"### Active memory search",
-		"Profile context alone is not enough. When the user's request relates to past conversations, prior decisions, specific preferences, or anything that may have been discussed before:",
-		"",
 	]
 
 	if (hasSearch) {
 		lines.push(
+			"### Active memory search",
+			"Profile context alone is not enough. When the user's request relates to past conversations, prior decisions, specific preferences, or anything that may have been discussed before:",
+			"",
 			"1. **Search before you act** — call supermemory_search with a focused query before responding to questions that might involve prior context.",
 			"2. **Be specific** — use targeted queries like \"user's preferred database\" rather than broad ones like \"preferences\".",
 			"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
@@ -142,6 +143,13 @@ export function buildPromptSection(params: {
 		lines.push(
 			"### Storing memories",
 			"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
+			"",
+		)
+	}
+	if (hasForget) {
+		lines.push(
+			"### Forgetting memories",
+			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\". Provide a descriptive query or the memory ID to target the closest match.",
 			"",
 		)
 	}

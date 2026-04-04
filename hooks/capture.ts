@@ -5,12 +5,17 @@ import { buildTurnDocumentId, stripInboundMetadata } from "../memory.ts"
 
 const SKIPPED_PROVIDERS = ["exec-event", "cron-event", "heartbeat"]
 
+const MAX_BUFFER_SIZE = 50
+const MAX_RETRY_COUNT = 3
+
 function extractTextsFromMessages(
 	messages: unknown[],
 	captureMode: string,
+	startIndex = 0,
 ): string[] {
 	const texts: string[] = []
-	for (const msg of messages) {
+	for (let i = startIndex; i < messages.length; i++) {
+		const msg = messages[i]
 		if (!msg || typeof msg !== "object") continue
 		const msgObj = msg as Record<string, unknown>
 		const role = msgObj.role
@@ -60,6 +65,12 @@ function extractTextsFromMessages(
 	return texts
 }
 
+type BufferedTurn = {
+	texts: string[]
+	timestamp: string
+	retryCount: number
+}
+
 export type SessionBuffer = {
 	addTurn(messages: unknown[]): void
 	flush(): Promise<{ success: number; failed: number }>
@@ -71,15 +82,37 @@ export function buildSessionBuffer(
 	cfg: SupermemoryConfig,
 	getSessionKey: () => string | undefined,
 ): SessionBuffer {
-	const bufferedTurns: string[][] = []
+	const bufferedTurns: BufferedTurn[] = []
+	let lastBufferedIndex = 0
 
 	return {
 		addTurn(messages: unknown[]) {
-			const texts = extractTextsFromMessages(messages, cfg.captureMode)
+			const texts = extractTextsFromMessages(
+				messages,
+				cfg.captureMode,
+				lastBufferedIndex,
+			)
 			if (texts.length > 0) {
-				bufferedTurns.push(texts)
+				bufferedTurns.push({
+					texts,
+					timestamp: new Date().toISOString(),
+					retryCount: 0,
+				})
 				log.debug(
 					`buffer: added turn ${bufferedTurns.length} (${texts.length} messages)`,
+				)
+			}
+			// Track the last buffered index to avoid re-processing
+			lastBufferedIndex = messages.length
+
+			// If buffer exceeds cap, flush immediately
+			if (bufferedTurns.length >= MAX_BUFFER_SIZE) {
+				log.warn(
+					`buffer: exceeded MAX_BUFFER_SIZE (${MAX_BUFFER_SIZE}), triggering immediate flush`,
+				)
+				// Fire-and-forget flush to avoid blocking the event handler
+				this.flush().catch((err) =>
+					log.error("buffer: emergency flush failed", err),
 				)
 			}
 		},
@@ -91,19 +124,17 @@ export function buildSessionBuffer(
 			}
 
 			const sk = getSessionKey()
-			const now = new Date().toISOString()
 
 			// Build one document per buffered turn with unique IDs
-			const documents = bufferedTurns.map((texts, idx) => ({
-				content: texts.join("\n\n"),
+			const documents = bufferedTurns.map((turn, idx) => ({
+				content: turn.texts.join("\n\n"),
 				metadata: {
 					source: "openclaw" as const,
-					documentDate: now,
-					timestamp: now,
+					documentDate: turn.timestamp,
+					timestamp: turn.timestamp,
 					turnIndex: idx,
 				},
 				customId: sk ? buildTurnDocumentId(sk, idx) : undefined,
-				entityContext: cfg.entityContext,
 			}))
 
 			const totalChars = documents.reduce(
@@ -123,7 +154,23 @@ export function buildSessionBuffer(
 				return result
 			} catch (err) {
 				log.error("buffer: flush failed", err)
-				return { success: 0, failed: bufferedTurns.length }
+
+				// Increment retry counts and drop turns that exceeded max retries
+				const surviving: BufferedTurn[] = []
+				for (const turn of bufferedTurns) {
+					turn.retryCount++
+					if (turn.retryCount >= MAX_RETRY_COUNT) {
+						log.warn(
+							`buffer: dropping turn after ${MAX_RETRY_COUNT} failed retries (${turn.texts.length} messages, timestamp: ${turn.timestamp})`,
+						)
+					} else {
+						surviving.push(turn)
+					}
+				}
+				bufferedTurns.length = 0
+				surviving.forEach((t) => bufferedTurns.push(t))
+
+				return { success: 0, failed: documents.length }
 			}
 		},
 
@@ -158,7 +205,7 @@ export function buildCaptureHandler(
 		)
 			return
 
-		// Buffer the full conversation, not just the last turn
+		// Buffer only new messages since last buffered index
 		buffer.addTurn(event.messages)
 	}
 }

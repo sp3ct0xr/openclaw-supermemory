@@ -292,7 +292,6 @@ export class SupermemoryClient {
 			content: string
 			metadata?: Record<string, string | number | boolean>
 			customId?: string
-			entityContext?: string
 		}[],
 		containerTag?: string,
 	): Promise<{ success: number; failed: number }> {
@@ -307,17 +306,15 @@ export class SupermemoryClient {
 			containerTag: tag,
 		})
 
+		// Note: entityContext is not included in batch docs — it belongs in
+		// container-level configuration, not per-document in the batch endpoint.
 		const prepared = documents.map((doc) => {
 			const cleaned = sanitizeContent(doc.content)
-			const clampedCtx = doc.entityContext
-				? clampEntityContext(doc.entityContext)
-				: undefined
 			return {
 				content: cleaned,
 				containerTag: tag,
 				...(doc.metadata && { metadata: doc.metadata }),
 				...(doc.customId && { customId: doc.customId }),
-				...(clampedCtx && { entityContext: clampedCtx }),
 			}
 		})
 

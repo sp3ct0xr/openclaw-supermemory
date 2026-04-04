@@ -107,8 +107,6 @@ export function buildDocumentId(sessionKey: string): string {
 	return `session_${sanitized}`
 }
 
-let turnCounter = 0
-
 export function buildTurnDocumentId(
 	sessionKey: string,
 	turnIndex: number,
@@ -117,6 +115,6 @@ export function buildTurnDocumentId(
 		.replace(/[^a-zA-Z0-9_]/g, "_")
 		.replace(/_+/g, "_")
 		.replace(/^_|_$/g, "")
-	const seq = turnCounter++
-	return `session_${sanitized}_t${turnIndex}_${seq}`
+	const uuid = crypto.randomUUID()
+	return `session_${sanitized}_t${turnIndex}_${uuid}`
 }
