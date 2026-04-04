@@ -255,11 +255,12 @@ export class SupermemoryClient {
 			searchMode?: "memories" | "hybrid" | "documents"
 			threshold?: number
 			filters?: Record<string, unknown>
-			include?: {
-				documents?: boolean
-				summaries?: boolean
-				relatedMemories?: boolean
-			}
+		include?: {
+			documents?: boolean
+			summaries?: boolean
+			relatedMemories?: boolean
+			forgottenMemories?: boolean
+		}
 		},
 	): Promise<SearchResult[]> {
 		const tag = containerTag ?? this.containerTag
@@ -361,14 +362,24 @@ export class SupermemoryClient {
 	async getProfile(
 		query?: string,
 		containerTag?: string,
+		opts?: {
+			threshold?: number
+			filters?: Record<string, unknown>
+		},
 	): Promise<ProfileResult> {
 		const tag = containerTag ?? this.containerTag
 
-		log.debugRequest("profile", { containerTag: tag, query })
+		log.debugRequest("profile", {
+			containerTag: tag,
+			query,
+			threshold: opts?.threshold,
+		})
 
 		const response = await this.client.profile({
 			containerTag: tag,
 			...(query && { q: query }),
+			...(opts?.threshold !== undefined && { threshold: opts.threshold }),
+			...(opts?.filters && { filters: opts.filters as any }),
 		})
 
 		log.debugResponse("profile.raw", response)
