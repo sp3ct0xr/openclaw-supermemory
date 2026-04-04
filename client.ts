@@ -656,6 +656,74 @@ export class SupermemoryClient {
 		return { id: result.id, action: "created" }
 	}
 
+	/** Get org-level Supermemory settings. */
+	async getSettings(): Promise<{
+		filterPrompt: string | null
+		shouldLLMFilter: boolean | null
+		chunkSize: number | null
+	}> {
+		log.debugRequest("settings.get", {})
+		const response = await this.client.settings.get()
+		const trunc = (s: string) =>
+			s.length > 50 ? `${s.slice(0, 50)}…` : s
+		log.debugResponse("settings.get", {
+			filterPrompt: response.filterPrompt ? trunc(response.filterPrompt) : null,
+			shouldLLMFilter: response.shouldLLMFilter,
+			chunkSize: response.chunkSize,
+		})
+		return {
+			filterPrompt: response.filterPrompt ?? null,
+			shouldLLMFilter: response.shouldLLMFilter ?? null,
+			chunkSize: response.chunkSize ?? null,
+		}
+	}
+
+	/** Update org-level Supermemory settings. */
+	async updateSettings(params: {
+		filterPrompt?: string | null
+		shouldLLMFilter?: boolean | null
+		chunkSize?: number | null
+	}): Promise<{
+		filterPrompt?: string | null
+		shouldLLMFilter?: boolean | null
+		chunkSize?: number | null
+	}> {
+		const trunc = (s: string) =>
+			s.length > 50 ? `${s.slice(0, 50)}…` : s
+		log.debugRequest("settings.update", {
+			...(params.filterPrompt !== undefined && {
+				filterPrompt: params.filterPrompt
+					? trunc(params.filterPrompt)
+					: params.filterPrompt,
+			}),
+			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
+			...(params.chunkSize !== undefined && { chunkSize: params.chunkSize }),
+		})
+		const response = await this.client.settings.update({
+			...(params.filterPrompt !== undefined && { filterPrompt: params.filterPrompt }),
+			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
+			...(params.chunkSize !== undefined && { chunkSize: params.chunkSize }),
+		})
+		log.debugResponse("settings.update", {
+			...(response.updated.filterPrompt !== undefined && {
+				filterPrompt: response.updated.filterPrompt
+					? trunc(response.updated.filterPrompt)
+					: response.updated.filterPrompt,
+			}),
+			...(response.updated.shouldLLMFilter !== undefined && {
+				shouldLLMFilter: response.updated.shouldLLMFilter,
+			}),
+			...(response.updated.chunkSize !== undefined && {
+				chunkSize: response.updated.chunkSize,
+			}),
+		})
+		return {
+			filterPrompt: response.updated.filterPrompt,
+			shouldLLMFilter: response.updated.shouldLLMFilter,
+			chunkSize: response.updated.chunkSize,
+		}
+	}
+
 	getContainerTag(): string {
 		return this.containerTag
 	}

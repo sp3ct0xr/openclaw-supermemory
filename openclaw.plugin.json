@@ -69,6 +69,17 @@
 			"label": "Category Routing",
 			"help": "Route memories to category-specific containers (preferences, facts, decisions, etc.). ⚠️ Multiplies search API calls by 6x. Auto-disabled when Custom Containers are defined.",
 			"advanced": true
+		},
+		"filterPrompt": {
+			"label": "Filter Prompt (Org-Wide)",
+			"placeholder": "Custom instructions for org-wide content filtering...",
+			"help": "Org-wide LLM prompt controlling what gets extracted from ALL ingested content. Different from Entity Context (per-container). Leave blank for Supermemory defaults. Synced to Supermemory on plugin load.",
+			"advanced": true
+		},
+		"shouldLLMFilter": {
+			"label": "Enable LLM Filtering",
+			"help": "Enable server-side LLM filtering during ingestion. Must be enabled for Filter Prompt to take effect. Auto-enabled when Filter Prompt is set. Disable to save server tokens (raw indexing only).",
+			"advanced": true
 		}
 	},
 	"configSchema": {
@@ -97,7 +108,9 @@
 				}
 			},
 			"customContainerInstructions": { "type": "string" },
-			"categoryRouting": { "type": "boolean" }
+			"categoryRouting": { "type": "boolean" },
+			"filterPrompt": { "type": "string" },
+			"shouldLLMFilter": { "type": "boolean" }
 		},
 		"required": []
 	}

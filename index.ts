@@ -18,6 +18,7 @@ import { registerForgetTool } from "./tools/forget.ts"
 import { registerProfileTool } from "./tools/profile.ts"
 import { registerSearchTool } from "./tools/search.ts"
 import { registerStoreTool } from "./tools/store.ts"
+import { registerSettingsTool } from "./tools/settings.ts"
 import { registerUpdateTool } from "./tools/update.ts"
 
 try {
@@ -78,6 +79,25 @@ export default {
 		registerUpdateTool(api, client, cfg)
 		registerForgetTool(api, client, cfg)
 		registerProfileTool(api, client, cfg)
+		registerSettingsTool(api, client, cfg)
+
+		// Sync org-level settings from plugin config → Supermemory on startup.
+		// Note: this is one-way (config → server). If settings are changed via
+		// the supermemory_settings tool mid-session, cfg remains stale.
+		// This is fine because nothing reads cfg.filterPrompt after startup.
+		if (cfg.filterPrompt !== undefined || cfg.shouldLLMFilter !== undefined) {
+			client
+				.updateSettings({
+					...(cfg.filterPrompt !== undefined && { filterPrompt: cfg.filterPrompt }),
+					...(cfg.shouldLLMFilter !== undefined && { shouldLLMFilter: cfg.shouldLLMFilter }),
+				})
+				.then(() => api.logger.info("supermemory: org settings synced from config"))
+				.catch((err) =>
+					api.logger.warn(
+						`supermemory: failed to sync org settings: ${err instanceof Error ? err.message : String(err)}`,
+					),
+				)
+		}
 
 		if (cfg.autoRecall) {
 			const recallHandler = buildRecallHandler(client, cfg)

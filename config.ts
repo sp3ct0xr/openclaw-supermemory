@@ -25,6 +25,12 @@ export type SupermemoryConfig = {
 	 *  Default: false — all memories go to the base container.
 	 *  Enable only after verifying it doesn't conflict with custom containers. */
 	categoryRouting: boolean
+	/** Org-wide LLM prompt controlling what gets extracted from ALL ingested content.
+	 *  Different from entityContext (per-container). Leave undefined to use Supermemory defaults. */
+	filterPrompt: string | undefined
+	/** Enable server-side LLM filtering during ingestion.
+	 *  Must be true for filterPrompt to take effect. */
+	shouldLLMFilter: boolean | undefined
 }
 
 const ALLOWED_KEYS = [
@@ -41,6 +47,8 @@ const ALLOWED_KEYS = [
 	"customContainers",
 	"customContainerInstructions",
 	"categoryRouting",
+	"filterPrompt",
+	"shouldLLMFilter",
 ]
 
 function assertAllowedKeys(
@@ -143,6 +151,17 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 			customContainers.length > 0
 				? false
 				: ((cfg.categoryRouting as boolean) ?? false),
+		filterPrompt:
+			typeof cfg.filterPrompt === "string" && cfg.filterPrompt.trim()
+				? cfg.filterPrompt.trim()
+				: undefined,
+		// Default shouldLLMFilter to true when filterPrompt is set
+		shouldLLMFilter:
+			typeof cfg.shouldLLMFilter === "boolean"
+				? cfg.shouldLLMFilter
+				: typeof cfg.filterPrompt === "string" && cfg.filterPrompt.trim()
+					? true
+					: undefined,
 	}
 }
 
@@ -174,6 +193,8 @@ export const supermemoryConfigSchema = {
 			},
 			customContainerInstructions: { type: "string" },
 			categoryRouting: { type: "boolean" },
+			filterPrompt: { type: "string" },
+			shouldLLMFilter: { type: "boolean" },
 		},
 	},
 	parse: parseConfig,
