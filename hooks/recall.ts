@@ -186,11 +186,13 @@ export function buildRecallHandler(
 		)
 
 		try {
-			const profile = await client.getProfile(query)
+			const profile = await client.getProfile(
+				isNewSession ? undefined : query,
+			)
 			const memoryContext = formatContext(
 				includeProfile ? profile.static : [],
 				includeProfile ? profile.dynamic : [],
-				profile.searchResults,
+				[], // search results no longer auto-injected — agents use supermemory_search actively
 				cfg.maxRecallResults,
 			)
 

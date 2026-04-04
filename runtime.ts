@@ -113,24 +113,43 @@ export function buildPromptSection(params: {
 }): string[] {
 	const hasSearch = params.availableTools.has("supermemory_search")
 	const hasStore = params.availableTools.has("supermemory_store")
+	const hasProfile = params.availableTools.has("supermemory_profile")
 	if (!hasSearch && !hasStore) return []
 
 	const lines: string[] = [
 		"## Memory (Supermemory)",
 		"",
 		"Memory is managed by Supermemory (cloud). Do not read or write local memory files like MEMORY.md or memory/*.md — they do not exist.",
-		"Relevant memories are automatically injected at the start of each conversation.",
+		"",
+		"### What is auto-injected",
+		"Your user profile (persistent facts and recent context) is automatically injected at the start of each session. This gives you baseline knowledge about the user without any tool calls.",
+		"",
+		"### Active memory search",
+		"Profile context alone is not enough. When the user's request relates to past conversations, prior decisions, specific preferences, or anything that may have been discussed before:",
 		"",
 	]
 
 	if (hasSearch) {
 		lines.push(
-			"Use supermemory_search to look up prior conversations, preferences, and facts.",
+			"1. **Search before you act** — call supermemory_search with a focused query before responding to questions that might involve prior context.",
+			"2. **Be specific** — use targeted queries like \"user's preferred database\" rather than broad ones like \"preferences\".",
+			"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
+			"4. **Don't guess from profile alone** — the profile is a summary. Search for details when the user asks about specifics.",
+			"",
 		)
 	}
 	if (hasStore) {
 		lines.push(
-			"Use supermemory_store to save important information the user asks you to remember.",
+			"### Storing memories",
+			"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
+			"",
+		)
+	}
+	if (hasProfile) {
+		lines.push(
+			"### Profile inspection",
+			"Use supermemory_profile to see a full summary of what is known about the user if you need an overview beyond what was auto-injected.",
+			"",
 		)
 	}
 
