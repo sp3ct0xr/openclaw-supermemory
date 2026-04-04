@@ -512,7 +512,9 @@ export class SupermemoryClient {
 		}
 
 		const HIGH_THRESHOLD = 0.80
-		const highConfidence = results.filter((r) => r.score >= HIGH_THRESHOLD)
+		const highConfidence = results.filter(
+			(r) => r.similarity !== undefined && r.similarity >= HIGH_THRESHOLD,
+		)
 
 		if (highConfidence.length > 0) {
 			// Delete all high-confidence matches
@@ -520,8 +522,8 @@ export class SupermemoryClient {
 				await this.deleteMemory(target.id, containerTag)
 			}
 			const previews = highConfidence
-				.map((r) => limitText(r.content || r.memory || "", 60))
-				.join("", "")
+				.map((r) => `"${limitText(r.content || r.memory || "", 60)}"`)
+				.join(", ")
 			return {
 				success: true,
 				message: `Forgot ${highConfidence.length} memor${highConfidence.length === 1 ? "y" : "ies"}: ${previews}`,
