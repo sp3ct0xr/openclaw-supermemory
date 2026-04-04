@@ -23,10 +23,15 @@ export function registerSettingsTool(
 						"'get': show current settings. 'update': change one or more settings.",
 				}),
 				filterPrompt: Type.Optional(
-					Type.String({
-						description:
-							"Org-wide LLM prompt controlling what gets extracted from ALL ingested content. Only used with action='update'.",
-					}),
+					Type.Union(
+						[
+							Type.String({
+								description:
+									"Org-wide LLM prompt controlling what gets extracted from ALL ingested content. Only used with action='update'. Pass null to clear.",
+							}),
+							Type.Null(),
+						],
+					),
 				),
 				shouldLLMFilter: Type.Optional(
 					Type.Boolean({
@@ -45,7 +50,7 @@ export function registerSettingsTool(
 				_toolCallId: string,
 				params: {
 					action: string
-					filterPrompt?: string
+					filterPrompt?: string | null
 					shouldLLMFilter?: boolean
 					chunkSize?: number
 				},
@@ -87,11 +92,14 @@ export function registerSettingsTool(
 						}
 					}
 
-					// Auto-enable shouldLLMFilter when filterPrompt is set
+					// Auto-enable shouldLLMFilter when filterPrompt is set (non-null)
+					// Auto-disable when filterPrompt is explicitly cleared (null)
 					// (otherwise the server ignores the prompt)
 					const effectiveShouldLLMFilter =
 						params.shouldLLMFilter ??
-						(params.filterPrompt !== undefined ? true : undefined)
+						(params.filterPrompt !== undefined
+							? params.filterPrompt !== null
+							: undefined)
 
 					log.debug("settings tool: updating settings", {
 						updatedKeys: [
@@ -100,7 +108,7 @@ export function registerSettingsTool(
 							...(params.chunkSize !== undefined ? ["chunkSize"] : []),
 						],
 						...(params.filterPrompt !== undefined && {
-							filterPromptLength: params.filterPrompt.length,
+							filterPromptLength: params.filterPrompt?.length ?? 0,
 						}),
 					})
 
