@@ -5,7 +5,7 @@
 	"description": "OpenClaw Supermemory memory plugin",
 	"license": "MIT",
 	"dependencies": {
-		"supermemory": "^4.0.0",
+		"supermemory": "^4.21.1",
 		"@sinclair/typebox": "0.34.47"
 	},
 	"scripts": {

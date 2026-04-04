@@ -106,3 +106,17 @@ export function buildDocumentId(sessionKey: string): string {
 		.replace(/^_|_$/g, "")
 	return `session_${sanitized}`
 }
+
+let turnCounter = 0
+
+export function buildTurnDocumentId(
+	sessionKey: string,
+	turnIndex: number,
+): string {
+	const sanitized = sessionKey
+		.replace(/[^a-zA-Z0-9_]/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_|_$/g, "")
+	const seq = turnCounter++
+	return `session_${sanitized}_t${turnIndex}_${seq}`
+}

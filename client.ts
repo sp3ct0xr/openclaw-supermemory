@@ -227,6 +227,61 @@ export class SupermemoryClient {
 		return { deletedCount }
 	}
 
+	async batchAddMemories(
+		documents: {
+			content: string
+			metadata?: Record<string, string | number | boolean>
+			customId?: string
+			entityContext?: string
+		}[],
+		containerTag?: string,
+	): Promise<{ success: number; failed: number }> {
+		if (documents.length === 0) {
+			return { success: 0, failed: 0 }
+		}
+
+		const tag = containerTag ?? this.containerTag
+
+		log.debugRequest("documents.batchAdd", {
+			count: documents.length,
+			containerTag: tag,
+		})
+
+		const prepared = documents.map((doc) => {
+			const cleaned = sanitizeContent(doc.content)
+			const clampedCtx = doc.entityContext
+				? clampEntityContext(doc.entityContext)
+				: undefined
+			return {
+				content: cleaned,
+				containerTag: tag,
+				...(doc.metadata && { metadata: doc.metadata }),
+				...(doc.customId && { customId: doc.customId }),
+				...(clampedCtx && { entityContext: clampedCtx }),
+			}
+		})
+
+		const result = await this.client.documents.batchAdd({
+			documents: prepared,
+		})
+
+		log.debugResponse("documents.batchAdd", {
+			success: result.success,
+			failed: result.failed,
+		})
+
+		if (result.failed > 0) {
+			const errors = result.results
+				.filter((r) => r.status === "error")
+				.map((r) => r.error ?? r.details ?? "unknown")
+			log.warn(
+				`batchAdd: ${result.failed} failures: ${errors.join("; ")}`,
+			)
+		}
+
+		return { success: result.success, failed: result.failed }
+	}
+
 	getContainerTag(): string {
 		return this.containerTag
 	}

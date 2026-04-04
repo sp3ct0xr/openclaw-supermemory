@@ -6,7 +6,11 @@ import { SupermemoryClient } from "./client.ts"
 import { registerCli, registerCliSetup } from "./commands/cli.ts"
 import { registerCommands, registerStubCommands } from "./commands/slash.ts"
 import { parseConfig, supermemoryConfigSchema } from "./config.ts"
-import { buildCaptureHandler } from "./hooks/capture.ts"
+import {
+	buildCaptureHandler,
+	buildSessionBuffer,
+	type SessionBuffer,
+} from "./hooks/capture.ts"
 import { buildRecallHandler } from "./hooks/recall.ts"
 import { initLogger } from "./logger.ts"
 import { buildMemoryRuntime, buildPromptSection } from "./runtime.ts"
@@ -49,12 +53,24 @@ export default {
 
 		const client = new SupermemoryClient(cfg.apiKey, cfg.containerTag)
 
-		api.registerMemoryRuntime?.(buildMemoryRuntime(client))
-		api.registerMemoryPromptSection?.(buildPromptSection)
-		api.registerMemoryFlushPlan?.(() => null)
-
 		let sessionKey: string | undefined
 		const getSessionKey = () => sessionKey
+
+		// Session buffer: accumulates turns, flushes as batch
+		const sessionBuffer: SessionBuffer = buildSessionBuffer(
+			client,
+			cfg,
+			getSessionKey,
+		)
+
+		api.registerMemoryRuntime?.(buildMemoryRuntime(client))
+		api.registerMemoryPromptSection?.(buildPromptSection)
+		api.registerMemoryFlushPlan?.(() => {
+			if (sessionBuffer.pending() === 0) return null
+			return async () => {
+				await sessionBuffer.flush()
+			}
+		})
 
 		registerSearchTool(api, client, cfg)
 		registerStoreTool(api, client, cfg, getSessionKey)
@@ -73,7 +89,10 @@ export default {
 		}
 
 		if (cfg.autoCapture) {
-			api.on("agent_end", buildCaptureHandler(client, cfg, getSessionKey))
+			api.on(
+				"agent_end",
+				buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
+			)
 		}
 
 		registerCommands(api, client, cfg, getSessionKey)
