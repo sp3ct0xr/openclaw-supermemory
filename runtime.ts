@@ -137,6 +137,13 @@ export function buildPromptSection(params: {
 			"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
 			"4. **Don't guess from profile alone** — the profile is a summary. Search for details when the user asks about specifics.",
 			"",
+			"**Search modes:**",
+			"- `mode: 'fast'` (default) — memory-level search, low latency, good for most queries. Uses hybrid search (memories + document chunks).",
+			"- `mode: 'deep'` — chunk-level document search with reranking and query rewriting. Use for complex or detailed queries where precision matters.",
+			"",
+			"**Temporal filters:** Use `after` and `before` (ISO dates) to scope search to a time range (e.g. 'what did the user say last week').",
+			"**Reranking:** Use `rerank: true` for better result ordering (+~100ms). Auto-enabled in deep mode.",
+			"",
 		)
 	}
 	if (hasStore) {

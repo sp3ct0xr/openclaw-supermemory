@@ -189,6 +189,7 @@ export function buildRecallHandler(
 			const profile = await client.getProfile(
 				isNewSession ? undefined : query,
 			)
+
 			const memoryContext = formatContext(
 				includeProfile ? profile.static : [],
 				includeProfile ? profile.dynamic : [],

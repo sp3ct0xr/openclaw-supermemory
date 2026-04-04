@@ -33,11 +33,50 @@ export type SearchResult = {
 	children?: VersionChainContext[]
 }
 
+export type DeepSearchResult = {
+	documentId: string
+	title: string | null
+	score: number
+	chunks: { content: string; score: number; isRelevant: boolean }[]
+	summary?: string | null
+	content?: string | null
+	metadata?: Record<string, unknown> | null
+	createdAt: string
+	updatedAt: string
+}
+
 export type ProfileSearchResult = {
 	memory?: string
 	updatedAt?: string
 	similarity?: number
 	[key: string]: unknown
+}
+
+/** Build an AND filter expression for temporal date range filtering. */
+export function buildTemporalFilters(params: {
+	after?: string
+	before?: string
+	dateField?: string
+}): { AND: Array<{ key: string; value: string; filterType: "metadata"; numericOperator: ">" | "<" }> } | undefined {
+	const field = params.dateField ?? "documentDate"
+	const conditions: Array<{ key: string; value: string; filterType: "metadata"; numericOperator: ">" | "<" }> = []
+	if (params.after) {
+		conditions.push({
+			key: field,
+			value: params.after,
+			filterType: "metadata",
+			numericOperator: ">",
+		})
+	}
+	if (params.before) {
+		conditions.push({
+			key: field,
+			value: params.before,
+			filterType: "metadata",
+			numericOperator: "<",
+		})
+	}
+	return conditions.length > 0 ? { AND: conditions } : undefined
 }
 
 export type ProfileResult = {
@@ -135,6 +174,18 @@ export class SupermemoryClient {
 		query: string,
 		limit = 5,
 		containerTag?: string,
+		opts?: {
+			rerank?: boolean
+			rewriteQuery?: boolean
+			searchMode?: "memories" | "hybrid" | "documents"
+			threshold?: number
+			filters?: Record<string, unknown>
+			include?: {
+				documents?: boolean
+				summaries?: boolean
+				relatedMemories?: boolean
+			}
+		},
 	): Promise<SearchResult[]> {
 		const tag = containerTag ?? this.containerTag
 
@@ -142,17 +193,29 @@ export class SupermemoryClient {
 			query,
 			limit,
 			containerTag: tag,
+			...(opts && {
+				rerank: opts.rerank,
+				rewriteQuery: opts.rewriteQuery,
+				searchMode: opts.searchMode,
+				threshold: opts.threshold,
+			}),
 		})
 
 		const response = await this.client.search.memories({
 			q: query,
 			containerTag: tag,
 			limit,
+			...(opts?.rerank !== undefined && { rerank: opts.rerank }),
+			...(opts?.rewriteQuery !== undefined && { rewriteQuery: opts.rewriteQuery }),
+			...(opts?.searchMode && { searchMode: opts.searchMode }),
+			...(opts?.threshold !== undefined && { threshold: opts.threshold }),
+			...(opts?.filters && { filters: opts.filters as any }),
+			...(opts?.include && { include: opts.include }),
 		})
 
 		const results: SearchResult[] = (response.results ?? []).map((r) => ({
 			id: r.id,
-			content: r.memory ?? "",
+			content: r.memory ?? r.chunk ?? "",
 			memory: r.memory,
 			similarity: r.similarity,
 			metadata: r.metadata ?? undefined,
@@ -162,6 +225,60 @@ export class SupermemoryClient {
 		}))
 
 		log.debugResponse("search.memories", { count: results.length })
+		return results
+	}
+
+	/** Deep search via search.documents() — returns chunk-level results with reranking. */
+	async deepSearch(
+		query: string,
+		limit = 5,
+		opts?: {
+			rerank?: boolean
+			rewriteQuery?: boolean
+			filters?: Record<string, unknown>
+			includeFullDocs?: boolean
+			includeSummary?: boolean
+			chunkThreshold?: number
+			containerTags?: string[]
+		},
+	): Promise<DeepSearchResult[]> {
+		log.debugRequest("search.documents", {
+			query,
+			limit,
+			rerank: opts?.rerank,
+			rewriteQuery: opts?.rewriteQuery,
+			containerTags: opts?.containerTags,
+		})
+
+		const response = await this.client.search.documents({
+			q: query,
+			limit,
+			rerank: opts?.rerank ?? true,
+			rewriteQuery: opts?.rewriteQuery ?? true,
+			...(opts?.containerTags && { containerTags: opts.containerTags }),
+			...(opts?.filters && { filters: opts.filters as any }),
+			...(opts?.includeFullDocs !== undefined && { includeFullDocs: opts.includeFullDocs }),
+			...(opts?.includeSummary !== undefined && { includeSummary: opts.includeSummary }),
+			...(opts?.chunkThreshold !== undefined && { chunkThreshold: opts.chunkThreshold }),
+		})
+
+		const results: DeepSearchResult[] = (response.results ?? []).map((r) => ({
+			documentId: r.documentId,
+			title: r.title,
+			score: r.score,
+			chunks: r.chunks.map((c) => ({
+				content: c.content,
+				score: c.score,
+				isRelevant: c.isRelevant,
+			})),
+			summary: r.summary,
+			content: r.content,
+			metadata: r.metadata,
+			createdAt: r.createdAt,
+			updatedAt: r.updatedAt,
+		}))
+
+		log.debugResponse("search.documents", { count: results.length })
 		return results
 	}
 
