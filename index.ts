@@ -105,7 +105,13 @@ export default {
 			start: () => {
 				api.logger.info("supermemory: connected")
 			},
-			stop: () => {
+			stop: async () => {
+				api.logger.info("supermemory: flushing buffer before stop")
+				try {
+					await sessionBuffer.flush()
+				} catch (err) {
+					api.logger.error("supermemory: flush on stop failed", err)
+				}
 				api.logger.info("supermemory: stopped")
 			},
 		})

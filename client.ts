@@ -292,7 +292,6 @@ export class SupermemoryClient {
 			content: string
 			metadata?: Record<string, string | number | boolean>
 			customId?: string
-			entityContext?: string
 		}[],
 		containerTag?: string,
 	): Promise<{ success: number; failed: number }> {
@@ -307,17 +306,18 @@ export class SupermemoryClient {
 			containerTag: tag,
 		})
 
+		// entityContext is NOT available in DocumentBatchAddParams (SDK v4.21.1).
+		// It only exists on DocumentAddParams (single-add). The batch endpoint
+		// does not accept it at any level (neither per-document nor top-level).
+		// Entity context must be configured separately via single add or
+		// container-level settings in the SuperMemory dashboard.
 		const prepared = documents.map((doc) => {
 			const cleaned = sanitizeContent(doc.content)
-			const clampedCtx = doc.entityContext
-				? clampEntityContext(doc.entityContext)
-				: undefined
 			return {
 				content: cleaned,
 				containerTag: tag,
 				...(doc.metadata && { metadata: doc.metadata }),
 				...(doc.customId && { customId: doc.customId }),
-				...(clampedCtx && { entityContext: clampedCtx }),
 			}
 		})
 
