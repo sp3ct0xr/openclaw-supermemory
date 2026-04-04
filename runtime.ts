@@ -160,18 +160,12 @@ export function buildPromptSection(params: {
 			"",
 		)
 	}
-	if (hasForget) {
-		lines.push(
-			"### Forgetting memories",
-			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\". Provide a descriptive query or the memory ID to target the closest match.",
-			"",
-		)
-	}
 	if (hasUpdate) {
 		lines.push(
 			"### Updating memories",
 			"Use supermemory_update when a known fact needs to change (e.g. user moved cities, changed preferences, corrected a prior statement). This creates a version chain — the old memory is preserved as history, the new version becomes current.",
 			"",
+			"**Params:** Pass `memoryId` (direct) or `query` (search-then-update) + `newContent`. Optional: `eventDate`, `forgetAfter` (TTL), `forgetReason`.",
 			"**Update vs Store:** Store is for NEW information. Update is for CHANGING existing information. Store auto-deduplicates; Update creates explicit version history.",
 			"**Update vs Correction:** When the user says 'no, actually X' — use supermemory_store with category 'correction' (force-creates distinct entry). When you need to revise a specific known memory by ID — use supermemory_update.",
 			"",
@@ -189,13 +183,14 @@ export function buildPromptSection(params: {
 			"### Ingesting content",
 			"Use supermemory_ingest to add external content to memory. Pass a URL or raw text — Supermemory auto-detects the format and extracts memories.",
 			"",
+			"**Params:** `content` (URL or text, required), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
 			"**Supported content:**",
-			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed)",
+			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed) — just pass the URL",
 			"- Text: plaintext, markdown, HTML, JSON, CSV",
-			"- Binary (base64): PDF (OCR), images (OCR + visual), audio (transcription), video (transcription)",
+			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
 			"",
 			"**Limits:** Text 1MB, URLs fetched content 10MB, files 50MB",
-			"**Use customId** to prevent duplicates when re-ingesting the same content (same customId = update, not duplicate).",
+			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
 			"",
 		)
 	}
