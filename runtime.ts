@@ -200,7 +200,7 @@ export function buildPromptSection(params: {
 			"- Text: plaintext, markdown, HTML, JSON, CSV",
 			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
 			"",
-			"**Limits:** Text content is clamped at ~100k chars by the plugin. URLs: Supermemory fetches up to 10MB server-side. Binary file uploads via SDK: 50MB max.",
+			"**Limits:** Text: ~100k chars (plugin sanitize). URLs: up to 10MB (Supermemory fetches server-side). Base64: sent raw up to 50MB (bypasses plugin sanitize).",
 			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
 			"",
 		)

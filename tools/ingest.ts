@@ -14,11 +14,11 @@ export function registerIngestTool(
 			name: "supermemory_ingest",
 			label: "Memory Ingest",
 			description:
-				"Ingest content into long-term memory. Accepts URLs (web pages, PDFs, YouTube, hosted images) or raw text/markdown/HTML. Supermemory auto-detects the content type and extracts memories.",
+				"Ingest content into long-term memory. Accepts URLs (web pages, PDFs, YouTube, hosted images), raw text/markdown/HTML, or base64-encoded files (PDF, images, audio, video). Supermemory auto-detects the content type.",
 			parameters: Type.Object({
 				content: Type.String({
 					description:
-						"URL (web page, PDF, YouTube video, hosted image) or raw text/markdown/HTML to ingest. Supermemory auto-detects format. For URLs, Supermemory fetches and processes server-side. Text is clamped at ~100k chars.",
+						"URL, raw text/markdown/HTML, or base64-encoded binary (PDF, image, audio, video). URLs are fetched server-side. Text is clamped at ~100k chars. Base64 is sent raw (up to 50MB).",
 				}),
 				customId: Type.Optional(
 					Type.String({
@@ -49,29 +49,63 @@ export function registerIngestTool(
 			) {
 				const tag = params.containerTag ?? undefined
 				const isUrl = /^https?:\/\//.test(params.content.trim())
+				// Detect base64: starts with data URI or looks like base64 blob
+				const isBase64 =
+					params.content.startsWith("data:") ||
+					(/^[A-Za-z0-9+/]{100,}={0,2}$/.test(
+						params.content.trim().slice(0, 200),
+					) &&
+						params.content.length > 1000)
+
+				const contentType = isUrl
+					? "URL"
+					: isBase64
+						? "base64"
+						: "text"
 
 				log.debug(
-					`ingest tool: ${isUrl ? "URL" : "text"} (${params.content.length} chars) customId="${params.customId ?? "none"}" containerTag="${tag ?? "default"}"`,
+					`ingest tool: ${contentType} (${params.content.length} chars) customId="${params.customId ?? "none"}" containerTag="${tag ?? "default"}"`,
 				)
 
-				const result = await client.addMemory(
-					params.content,
-					{
-						source: "openclaw_ingest",
-						documentDate: new Date().toISOString(),
-						...(isUrl && { contentUrl: params.content }),
-						...params.metadata,
-					},
-					params.customId,
-					tag,
-					cfg.entityContext,
-				)
+				let result: { id: string }
+
+				if (isBase64) {
+					// Base64 content: use raw client.add() to bypass sanitizeContent
+					// which would truncate at 100k chars and corrupt the payload
+					result = await (client as any).client.add({
+						content: params.content,
+						...(tag && { containerTag: tag }),
+						...(params.customId && { customId: params.customId }),
+						...(cfg.entityContext && { entityContext: cfg.entityContext }),
+						metadata: {
+							source: "openclaw_ingest",
+							documentDate: new Date().toISOString(),
+							...params.metadata,
+						},
+					})
+				} else {
+					// URL or text: use addMemory() which sanitizes content
+					result = await client.addMemory(
+						params.content,
+						{
+							source: "openclaw_ingest",
+							documentDate: new Date().toISOString(),
+							...(isUrl && { contentUrl: params.content }),
+							...params.metadata,
+						},
+						params.customId,
+						tag,
+						cfg.entityContext,
+					)
+				}
 
 				const preview = isUrl
 					? params.content
-					: params.content.length > 80
-						? `${params.content.slice(0, 80)}…`
-						: params.content
+					: isBase64
+						? `[base64 ${(params.content.length / 1024).toFixed(0)}KB]`
+						: params.content.length > 80
+							? `${params.content.slice(0, 80)}…`
+							: params.content
 
 				return {
 					content: [
