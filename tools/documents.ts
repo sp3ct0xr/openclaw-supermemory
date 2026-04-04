@@ -1,3 +1,4 @@
+import fs from "node:fs"
 import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
@@ -290,6 +291,17 @@ export function registerDocumentsTool(
 						}
 					}
 
+					if (!fs.existsSync(params.filePath)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `File not found: ${params.filePath}`,
+								},
+							],
+						}
+					}
+
 					log.debug(
 						`documents tool: upload filePath=${params.filePath} fileType=${params.fileType ?? "auto"} mimeType=${params.mimeType ?? "auto"}`,
 					)
@@ -355,7 +367,7 @@ export function registerDocumentsTool(
 					content: [
 						{
 							type: "text" as const,
-					text: "Invalid action. Use 'get', 'list', 'processing', 'update', 'upload', or 'delete'.",
+							text: "Invalid action. Use 'get', 'list', 'processing', 'update', 'upload', or 'delete'.",
 						},
 					],
 				}
