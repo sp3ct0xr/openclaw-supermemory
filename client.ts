@@ -255,12 +255,12 @@ export class SupermemoryClient {
 			searchMode?: "memories" | "hybrid" | "documents"
 			threshold?: number
 			filters?: Record<string, unknown>
-		include?: {
-			documents?: boolean
-			summaries?: boolean
-			relatedMemories?: boolean
-			forgottenMemories?: boolean
-		}
+			include?: {
+				documents?: boolean
+				summaries?: boolean
+				relatedMemories?: boolean
+				forgottenMemories?: boolean
+			}
 		},
 	): Promise<SearchResult[]> {
 		const tag = containerTag ?? this.containerTag
