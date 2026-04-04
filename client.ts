@@ -522,34 +522,41 @@ export class SupermemoryClient {
 		const tag = params.containerTag ?? this.containerTag
 		const threshold = params.similarityThreshold ?? 0.90
 
-		// Search for existing similar memories
-		try {
-			const existing = await this.search(params.content, 3, tag)
-			const match = existing.find(
-				(r) => r.similarity !== undefined && r.similarity >= threshold,
-			)
+		// Corrections should NEVER be deduped — force-create as a distinct memory
+		const skipDedup = params.category === "correction"
 
-			if (match) {
-				log.info(
-					`dedup: found similar memory (id=${match.id}, similarity=${match.similarity?.toFixed(3)}), updating instead of creating`,
+		if (!skipDedup) {
+			// Search for existing similar memories
+			try {
+				const existing = await this.search(params.content, 3, tag)
+				const match = existing.find(
+					(r) => r.similarity !== undefined && r.similarity >= threshold,
 				)
-				const result = await this.updateMemory({
-					id: match.id,
-					newContent: params.content,
-					containerTag: tag,
-					metadata: params.metadata,
-					temporalContext: {
-						documentDate: new Date().toISOString(),
-					},
-				})
-				return {
-					id: result.id,
-					action: "updated",
-					version: result.version,
+
+				if (match) {
+					log.info(
+						`dedup: found similar memory (id=${match.id}, similarity=${match.similarity?.toFixed(3)}), updating instead of creating`,
+					)
+					const result = await this.updateMemory({
+						id: match.id,
+						newContent: params.content,
+						containerTag: tag,
+						metadata: params.metadata,
+						temporalContext: {
+							documentDate: new Date().toISOString(),
+						},
+					})
+					return {
+						id: result.id,
+						action: "updated",
+						version: result.version,
+					}
 				}
+			} catch (err) {
+				log.debug("dedup: search failed, falling through to create", err)
 			}
-		} catch (err) {
-			log.debug("dedup: search failed, falling through to create", err)
+		} else {
+			log.info(`dedup: skipped for category="correction" — force-creating new memory`)
 		}
 
 		// No match — create new memory
