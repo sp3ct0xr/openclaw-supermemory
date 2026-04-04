@@ -144,6 +144,10 @@ export function buildPromptSection(params: {
 			"### Storing memories",
 			"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
 			"",
+			"**Atomic facts**: Store ONE fact per call. Instead of \"User likes dark mode and uses pnpm\", make two separate calls.",
+			"**Categories**: The tool auto-detects category (preference/fact/decision/entity/correction) but you can override. Corrections are HIGH priority — they replace outdated information.",
+			"**Deduplication**: The store automatically checks for similar existing memories. If a near-duplicate exists, it updates the existing memory instead of creating a new one.",
+			"",
 		)
 	}
 	if (hasForget) {

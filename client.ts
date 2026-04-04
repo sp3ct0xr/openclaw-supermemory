@@ -5,7 +5,11 @@ import {
 	validateContainerTag,
 } from "./lib/validate.js"
 import { log } from "./logger.ts"
-import { clampEntityContext } from "./memory.ts"
+import {
+	CATEGORY_CONTAINER_SUFFIX,
+	type MemoryCategory,
+	clampEntityContext,
+} from "./memory.ts"
 
 export type SearchResult = {
 	id: string
@@ -50,6 +54,21 @@ export class SupermemoryClient {
 		this.client = new Supermemory({ apiKey })
 		this.containerTag = containerTag
 		log.info(`initialized (container: ${containerTag})`)
+	}
+
+	/**
+	 * Resolve a container tag based on memory category.
+	 * Categories with a suffix get routed to `{base}_{suffix}`,
+	 * otherwise returns the base container tag.
+	 */
+	resolveContainerTag(
+		category?: MemoryCategory,
+		explicitTag?: string,
+	): string {
+		if (explicitTag) return explicitTag
+		if (!category) return this.containerTag
+		const suffix = CATEGORY_CONTAINER_SUFFIX[category]
+		return suffix ? `${this.containerTag}_${suffix}` : this.containerTag
 	}
 
 	async addMemory(
@@ -340,6 +359,60 @@ export class SupermemoryClient {
 		}
 
 		return { success: result.success, failed: result.failed }
+	}
+
+	/** Dedup-aware add: search for similar memory first, update if found. */
+	async addOrUpdateMemory(params: {
+		content: string
+		category?: MemoryCategory
+		metadata?: Record<string, string | number | boolean>
+		customId?: string
+		containerTag?: string
+		entityContext?: string
+		similarityThreshold?: number
+	}): Promise<{ id: string; action: "created" | "updated"; version?: number }> {
+		const tag = params.containerTag ?? this.containerTag
+		const threshold = params.similarityThreshold ?? 0.85
+
+		// Search for existing similar memories
+		try {
+			const existing = await this.search(params.content, 3, tag)
+			const match = existing.find(
+				(r) => r.similarity !== undefined && r.similarity >= threshold,
+			)
+
+			if (match) {
+				log.info(
+					`dedup: found similar memory (id=${match.id}, similarity=${match.similarity?.toFixed(3)}), updating instead of creating`,
+				)
+				const result = await this.updateMemory({
+					id: match.id,
+					newContent: params.content,
+					containerTag: tag,
+					metadata: params.metadata,
+					temporalContext: {
+						documentDate: new Date().toISOString(),
+					},
+				})
+				return {
+					id: result.id,
+					action: "updated",
+					version: result.version,
+				}
+			}
+		} catch (err) {
+			log.debug("dedup: search failed, falling through to create", err)
+		}
+
+		// No match — create new memory
+		const result = await this.addMemory(
+			params.content,
+			params.metadata,
+			params.customId,
+			tag,
+			params.entityContext,
+		)
+		return { id: result.id, action: "created" }
 	}
 
 	getContainerTag(): string {
