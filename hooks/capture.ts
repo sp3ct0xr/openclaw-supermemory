@@ -84,9 +84,19 @@ export function buildSessionBuffer(
 ): SessionBuffer {
 	const bufferedTurns: BufferedTurn[] = []
 	let lastBufferedIndex = 0
+	let flushInProgress = false
 
 	return {
 		addTurn(messages: unknown[]) {
+			// Defensive reset: if messages array is shorter than our bookmark,
+			// a new session or context has started — reset to avoid skipping.
+			if (messages.length < lastBufferedIndex) {
+				log.debug(
+					`buffer: messages.length (${messages.length}) < lastBufferedIndex (${lastBufferedIndex}), resetting bookmark`,
+				)
+				lastBufferedIndex = 0
+			}
+
 			const texts = extractTextsFromMessages(
 				messages,
 				cfg.captureMode,
@@ -123,10 +133,24 @@ export function buildSessionBuffer(
 				return { success: 0, failed: 0 }
 			}
 
+			// Concurrency guard: if a flush is already in-flight, skip to
+			// avoid double-sending the same turns.
+			if (flushInProgress) {
+				log.debug("buffer: flush already in progress, skipping")
+				return { success: 0, failed: 0 }
+			}
+
+			flushInProgress = true
+
+			// Atomically drain the buffer before the async call so concurrent
+			// addTurn() calls append to a fresh array instead of the one we're
+			// about to send.
+			const batch = bufferedTurns.splice(0, bufferedTurns.length)
+
 			const sk = getSessionKey()
 
 			// Build one document per buffered turn with unique IDs
-			const documents = bufferedTurns.map((turn, idx) => ({
+			const documents = batch.map((turn, idx) => ({
 				content: turn.texts.join("\n\n"),
 				metadata: {
 					source: "openclaw" as const,
@@ -147,7 +171,6 @@ export function buildSessionBuffer(
 
 			try {
 				const result = await client.batchAddMemories(documents)
-				bufferedTurns.length = 0 // clear after successful flush
 				log.info(
 					`buffer: flushed ${result.success} ok, ${result.failed} failed`,
 				)
@@ -155,22 +178,22 @@ export function buildSessionBuffer(
 			} catch (err) {
 				log.error("buffer: flush failed", err)
 
-				// Increment retry counts and drop turns that exceeded max retries
-				const surviving: BufferedTurn[] = []
-				for (const turn of bufferedTurns) {
+				// Increment retry counts, push survivors back into the
+				// live buffer so the next flush retries them.
+				for (const turn of batch) {
 					turn.retryCount++
 					if (turn.retryCount >= MAX_RETRY_COUNT) {
 						log.warn(
 							`buffer: dropping turn after ${MAX_RETRY_COUNT} failed retries (${turn.texts.length} messages, timestamp: ${turn.timestamp})`,
 						)
 					} else {
-						surviving.push(turn)
+						bufferedTurns.push(turn)
 					}
 				}
-				bufferedTurns.length = 0
-				surviving.forEach((t) => bufferedTurns.push(t))
 
 				return { success: 0, failed: documents.length }
+			} finally {
+				flushInProgress = false
 			}
 		},
 

@@ -306,8 +306,11 @@ export class SupermemoryClient {
 			containerTag: tag,
 		})
 
-		// Note: entityContext is not included in batch docs — it belongs in
-		// container-level configuration, not per-document in the batch endpoint.
+		// entityContext is NOT available in DocumentBatchAddParams (SDK v4.21.1).
+		// It only exists on DocumentAddParams (single-add). The batch endpoint
+		// does not accept it at any level (neither per-document nor top-level).
+		// Entity context must be configured separately via single add or
+		// container-level settings in the SuperMemory dashboard.
 		const prepared = documents.map((doc) => {
 			const cleaned = sanitizeContent(doc.content)
 			return {
