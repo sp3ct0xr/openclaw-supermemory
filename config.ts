@@ -137,7 +137,12 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 			typeof cfg.customContainerInstructions === "string"
 				? cfg.customContainerInstructions
 				: "",
-		categoryRouting: (cfg.categoryRouting as boolean) ?? false,
+		// Category routing is forced OFF when custom containers are defined
+		// to avoid routing conflicts between the two systems.
+		categoryRouting:
+			customContainers.length > 0
+				? false
+				: ((cfg.categoryRouting as boolean) ?? false),
 	}
 }
 
