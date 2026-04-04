@@ -115,7 +115,7 @@ export function buildPromptSection(params: {
 	const hasStore = params.availableTools.has("supermemory_store")
 	const hasForget = params.availableTools.has("supermemory_forget")
 	const hasProfile = params.availableTools.has("supermemory_profile")
-	if (!hasSearch && !hasStore && !hasForget) return []
+	if (!hasSearch && !hasStore && !hasForget && !hasProfile) return []
 
 	const lines: string[] = [
 		"## Memory (Supermemory)",
