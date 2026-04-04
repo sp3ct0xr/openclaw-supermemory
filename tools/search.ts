@@ -118,8 +118,8 @@ export function registerSearchTool(
 				if (mode === "deep") {
 					const deepResults = await client.deepSearch(
 						params.query,
-						limit,
 						{
+							limit,
 							rerank: params.rerank ?? true,
 							rewriteQuery: true,
 							includeSummary: true,
