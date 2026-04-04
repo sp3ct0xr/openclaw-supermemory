@@ -338,6 +338,8 @@ export class SupermemoryClient {
 			includeFullDocs?: boolean
 			includeSummary?: boolean
 			chunkThreshold?: number
+			/** @deprecated SDK v4.21.1 search.documents() only supports containerTags (array).
+			 *  Will migrate to containerTag (singular) when SDK adds it to SearchDocumentsParams. */
 			containerTags?: string[]
 		},
 	): Promise<DeepSearchResult[]> {
@@ -552,11 +554,13 @@ export class SupermemoryClient {
 		let page = 1
 
 		while (true) {
-			const response = await this.client.documents.list({
-				containerTags: [this.containerTag],
-				limit: 100,
-				page,
-			})
+		// TODO: SDK v4.21.1 documents.list() only supports deprecated containerTags (array).
+		// Migrate to containerTag (singular) when SDK adds it to DocumentListParams.
+		const response = await this.client.documents.list({
+			containerTags: [this.containerTag],
+			limit: 100,
+			page,
+		})
 
 			if (!response.memories || response.memories.length === 0) break
 
@@ -913,6 +917,8 @@ export class SupermemoryClient {
 	}> {
 		const tag = opts?.containerTag ?? this.containerTag
 		log.debugRequest("documents.list", { tag, ...opts })
+		// TODO: SDK v4.21.1 documents.list() only supports deprecated containerTags (array).
+		// Migrate to containerTag (singular) when SDK adds it to DocumentListParams.
 		const response = await this.client.documents.list({
 			containerTags: [tag],
 			...(opts?.page && { page: opts.page }),
