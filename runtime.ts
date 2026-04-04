@@ -113,8 +113,11 @@ export function buildPromptSection(params: {
 }): string[] {
 	const hasSearch = params.availableTools.has("supermemory_search")
 	const hasStore = params.availableTools.has("supermemory_store")
+	const hasUpdate = params.availableTools.has("supermemory_update")
 	const hasForget = params.availableTools.has("supermemory_forget")
 	const hasProfile = params.availableTools.has("supermemory_profile")
+	const hasIngest = params.availableTools.has("supermemory_ingest")
+	const hasSettings = params.availableTools.has("supermemory_settings")
 	if (!hasSearch && !hasStore && !hasForget && !hasProfile) return []
 
 	const lines: string[] = [
@@ -164,10 +167,49 @@ export function buildPromptSection(params: {
 			"",
 		)
 	}
+	if (hasUpdate) {
+		lines.push(
+			"### Updating memories",
+			"Use supermemory_update when a known fact needs to change (e.g. user moved cities, changed preferences, corrected a prior statement). This creates a version chain — the old memory is preserved as history, the new version becomes current.",
+			"",
+			"**Update vs Store:** Store is for NEW information. Update is for CHANGING existing information. Store auto-deduplicates; Update creates explicit version history.",
+			"**Update vs Correction:** When the user says 'no, actually X' — use supermemory_store with category 'correction' (force-creates distinct entry). When you need to revise a specific known memory by ID — use supermemory_update.",
+			"",
+		)
+	}
+	if (hasForget) {
+		lines.push(
+			"### Forgetting memories",
+			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\". Provide a descriptive query or the memory ID to target the closest match.",
+			"",
+		)
+	}
+	if (hasIngest) {
+		lines.push(
+			"### Ingesting content",
+			"Use supermemory_ingest to add external content to memory. Pass a URL or raw text — Supermemory auto-detects the format and extracts memories.",
+			"",
+			"**Supported content:**",
+			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed)",
+			"- Text: plaintext, markdown, HTML, JSON, CSV",
+			"- Binary (base64): PDF (OCR), images (OCR + visual), audio (transcription), video (transcription)",
+			"",
+			"**Limits:** Text 1MB, URLs fetched content 10MB, files 50MB",
+			"**Use customId** to prevent duplicates when re-ingesting the same content (same customId = update, not duplicate).",
+			"",
+		)
+	}
 	if (hasProfile) {
 		lines.push(
 			"### Profile inspection",
 			"Use supermemory_profile to see a full summary of what is known about the user if you need an overview beyond what was auto-injected.",
+			"",
+		)
+	}
+	if (hasSettings) {
+		lines.push(
+			"### Platform settings",
+			"Use supermemory_settings to view or update org-level settings (filterPrompt, shouldLLMFilter, chunkSize).",
 			"",
 		)
 	}

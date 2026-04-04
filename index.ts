@@ -18,6 +18,8 @@ import { registerForgetTool } from "./tools/forget.ts"
 import { registerProfileTool } from "./tools/profile.ts"
 import { registerSearchTool } from "./tools/search.ts"
 import { registerStoreTool } from "./tools/store.ts"
+import { registerDocumentsTool } from "./tools/documents.ts"
+import { registerIngestTool } from "./tools/ingest.ts"
 import { registerSettingsTool } from "./tools/settings.ts"
 import { registerUpdateTool } from "./tools/update.ts"
 
@@ -79,6 +81,8 @@ export default {
 		registerUpdateTool(api, client, cfg)
 		registerForgetTool(api, client, cfg)
 		registerProfileTool(api, client, cfg)
+		registerIngestTool(api, client, cfg)
+		registerDocumentsTool(api, client, cfg)
 		registerSettingsTool(api, client, cfg)
 
 		// Sync org-level settings from plugin config → Supermemory on startup.
