@@ -3,34 +3,93 @@ export const MEMORY_CATEGORIES = [
 	"fact",
 	"decision",
 	"entity",
+	"correction",
 	"other",
 ] as const
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number]
 
+/** Map categories to container suffixes for routed storage. */
+export const CATEGORY_CONTAINER_SUFFIX: Record<MemoryCategory, string> = {
+	preference: "preferences",
+	fact: "facts",
+	decision: "decisions",
+	entity: "entities",
+	correction: "corrections",
+	other: "", // default container, no suffix
+}
+
 export function detectCategory(text: string): MemoryCategory {
 	const lower = text.toLowerCase()
-	if (/\b(?:prefer|like|love|hate|want)\b/.test(lower)) return "preference"
-	if (/\b(?:decided|will use|going with)\b/.test(lower)) return "decision"
-	if (/\+\d{10,}|@[\w.-]+\.\w+|\bis called\b/.test(lower)) return "entity"
-	if (/\b(?:is|are|has|have)\b/.test(lower)) return "fact"
+	// Corrections: explicit user corrections ("no, actually", "that's wrong", "not X, use Y")
+	if (
+		/\b(?:no[, ]+(?:actually|use|it's)|that'?s (?:wrong|incorrect|not right)|correct(?:ion)?:|instead (?:of|use))\b/.test(
+			lower,
+		)
+	)
+		return "correction"
+	if (/\b(?:prefer|like|love|hate|want|always use|favorite)\b/.test(lower))
+		return "preference"
+	if (/\b(?:decided|will use|going with|let'?s use|we'?ll go with)\b/.test(lower))
+		return "decision"
+	if (/\+\d{10,}|@[\w.-]+\.\w+|\bis called\b|\bmy name\b/.test(lower))
+		return "entity"
+	if (
+		/\b(?:(?:my|i|we|our) (?:is|are|has|have|work|live|speak|use|study|teach))|(?:works? (?:at|for|with))|(?:born in|grew up|graduated)\b/.test(
+			lower,
+		)
+	)
+		return "fact"
 	return "other"
 }
 
 export const MAX_ENTITY_CONTEXT_LENGTH = 1500
 
-export const DEFAULT_ENTITY_CONTEXT = `User-assistant conversation. Format: [role: user]...[user:end] and [role: assistant]...[assistant:end].
+export const DEFAULT_ENTITY_CONTEXT = `You are a memory extraction system. Analyze user-assistant conversations and extract **atomic facts** — one discrete piece of information per memory.
 
-Only extract things useful in FUTURE conversations. Most messages are not worth remembering.
+Format: [role: user]...[user:end] and [role: assistant]...[assistant:end].
 
-REMEMBER: lasting personal facts — dietary restrictions, preferences, personal details, workplace, location, tools, ongoing projects, routines, explicit "remember this" requests.
+## Extraction Rules
 
-DO NOT REMEMBER: temporary intents, one-time tasks, assistant actions (searching, writing files, generating code), assistant suggestions, implementation details, in-progress task status.
+### DECOMPOSE into atomic facts
+Each memory = ONE fact. Never combine multiple facts into a single memory.
+- BAD:  "User prefers dark mode and uses PostgreSQL and lives in Bangkok"
+- GOOD: "User prefers dark mode" + "User uses PostgreSQL" + "User lives in Bangkok"
 
-RULES:
+### CATEGORIZE each memory
+Assign one: preference | fact | decision | entity | correction
+- preference: Explicit likes/dislikes/preferences ("I prefer tabs", "I always use pnpm")
+- fact: Personal details, skills, background ("I work at SpX", "I have a PhD")
+- decision: Project choices ("We'll use PostgreSQL for this", "Going with Cloudflare Workers")
+- entity: Named entities, contacts, identifiers ("My name is PK", emails, phone numbers)
+- correction: User correcting prior information ("No, actually use tabs not spaces")
+
+### CONFIDENCE levels
+- EXPLICIT: User directly stated it ("I prefer X") — always extract
+- INFERRED: Pattern from repeated behavior (used X in 3+ conversations) — extract with lower confidence
+- UNCERTAIN: Mentioned once in passing — do NOT extract
+
+### TEMPORAL grounding
+If the memory relates to a specific time, include it: "As of April 2026, user is working on Project X"
+
+### DO extract
+- Lasting personal facts (dietary, location, workplace, tools, routines)
+- Stated preferences and strong opinions
+- Project decisions and architectural choices
+- Corrections to previously stored information (these are HIGH priority)
+- Explicit "remember this" requests
+- Recurring patterns across the conversation
+
+### DO NOT extract
+- One-time task requests ("find X", "write code for Y")
+- Assistant actions (searching, writing files, generating code)
+- Implementation details or in-progress work status
+- Transient intents or session-specific context
+- Anything the assistant suggested that the user didn't confirm
+
+### RULES
 - Assistant output is CONTEXT ONLY — never attribute assistant actions to the user
-- "find X" or "do Y" = one-time request, NOT a memory
-- Only store preferences explicitly stated ("I like...", "I prefer...", "I always...")
-- When in doubt, do NOT create a memory. Less is more.`
+- When the user corrects information, the correction REPLACES the old fact
+- When in doubt, do NOT create a memory. Precision > recall.`
 
 export function clampEntityContext(ctx: string): string {
 	if (ctx.length <= MAX_ENTITY_CONTEXT_LENGTH) return ctx

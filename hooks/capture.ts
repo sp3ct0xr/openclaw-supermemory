@@ -170,7 +170,43 @@ export function buildSessionBuffer(
 			)
 
 			try {
-				const result = await client.batchAddMemories(documents)
+				// Use single-add path when entityContext is configured,
+				// since batchAdd (SDK v4.21.1) does not support entityContext.
+				// This ensures server-side atomic fact extraction uses our
+				// enhanced extraction prompt from Phase 3.
+				const useEntityContext =
+					cfg.entityContext && cfg.entityContext.length > 0
+
+				let result: { success: number; failed: number }
+
+				if (useEntityContext && documents.length <= 10) {
+					// Single-add fallback: slower but supports entityContext
+					log.debug(
+						`buffer: using single-add path for ${documents.length} docs (entityContext enabled)`,
+					)
+					let success = 0
+					let failed = 0
+					for (const doc of documents) {
+						try {
+							await client.addMemory(
+								doc.content,
+								doc.metadata,
+								doc.customId,
+								undefined,
+								cfg.entityContext,
+							)
+							success++
+						} catch (docErr) {
+							log.warn("buffer: single-add failed for turn", docErr)
+							failed++
+						}
+					}
+					result = { success, failed }
+				} else {
+					// Batch path: faster, no entityContext support
+					result = await client.batchAddMemories(documents)
+				}
+
 				log.info(
 					`buffer: flushed ${result.success} ok, ${result.failed} failed`,
 				)

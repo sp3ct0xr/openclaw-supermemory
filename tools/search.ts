@@ -1,13 +1,13 @@
 import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
-import type { SupermemoryClient } from "../client.ts"
+import type { SearchResult, SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
 export function registerSearchTool(
 	api: OpenClawPluginApi,
 	client: SupermemoryClient,
-	_cfg: SupermemoryConfig,
+	cfg: SupermemoryConfig,
 ): void {
 	api.registerTool(
 		{
@@ -36,11 +36,41 @@ export function registerSearchTool(
 					`search tool: query="${params.query}" limit=${limit} containerTag="${params.containerTag ?? "default"}"`,
 				)
 
-				const results = await client.search(
-					params.query,
-					limit,
-					params.containerTag,
-				)
+				let results: SearchResult[]
+
+				if (cfg.categoryRouting && !params.containerTag) {
+					// When category routing is enabled, search across all
+					// category containers and merge results by similarity.
+					const tags = client.getCategoryContainerTags()
+					log.debug(
+						`search tool: cross-container search across ${tags.length} containers`,
+					)
+					const allResults = await Promise.all(
+						tags.map((tag) => client.search(params.query, limit, tag)),
+					)
+					// Merge, deduplicate by id, sort by similarity desc, take top N
+					const seen = new Set<string>()
+					const merged: SearchResult[] = []
+					for (const batch of allResults) {
+						for (const r of batch) {
+							if (!seen.has(r.id)) {
+								seen.add(r.id)
+								merged.push(r)
+							}
+						}
+					}
+					results = merged
+						.sort(
+							(a, b) => (b.similarity ?? 0) - (a.similarity ?? 0),
+						)
+						.slice(0, limit)
+				} else {
+					results = await client.search(
+						params.query,
+						limit,
+						params.containerTag,
+					)
+				}
 
 				if (results.length === 0) {
 					return {

@@ -7,6 +7,7 @@ import {
 	buildDocumentId,
 	detectCategory,
 	MEMORY_CATEGORIES,
+	type MemoryCategory,
 } from "../memory.ts"
 
 export function registerStoreTool(
@@ -19,7 +20,8 @@ export function registerStoreTool(
 		{
 			name: "supermemory_store",
 			label: "Memory Store",
-			description: "Save important information to long-term memory.",
+			description:
+				"Save important information to long-term memory. Automatically deduplicates: if a very similar memory already exists, it will be updated instead of duplicated.",
 			parameters: Type.Object({
 				text: Type.String({ description: "Information to remember" }),
 				category: Type.Optional(
@@ -47,33 +49,54 @@ export function registerStoreTool(
 					containerTag?: string
 				},
 			) {
-				const category = params.category ?? detectCategory(params.text)
+				const category = (params.category ??
+					detectCategory(params.text)) as MemoryCategory
 				const sk = getSessionKey()
 				const customId = sk ? buildDocumentId(sk) : undefined
 				const now = new Date().toISOString()
 
-				log.debug(
-					`store tool: category="${category}" customId="${customId}" containerTag="${params.containerTag ?? "default"}" eventDate="${params.eventDate ?? "none"}"`,
+				// Resolve container based on category routing
+				const routedTag = client.resolveContainerTag(
+					category,
+					params.containerTag,
+					cfg.categoryRouting,
 				)
 
-				await client.addMemory(
-					params.text,
-					{
+				log.debug(
+					`store tool: category="${category}" customId="${customId}" containerTag="${routedTag}" eventDate="${params.eventDate ?? "none"}"`,
+				)
+
+				// Dedup-aware: search for similar memory, update if found
+				const result = await client.addOrUpdateMemory({
+					content: params.text,
+					category,
+					metadata: {
 						type: category,
 						source: "openclaw_tool",
 						documentDate: now,
 						...(params.eventDate && { eventDate: params.eventDate }),
 					},
 					customId,
-					params.containerTag,
-					cfg.entityContext,
-				)
+					containerTag: routedTag,
+					entityContext: cfg.entityContext,
+				})
 
 				const preview =
-					params.text.length > 80 ? `${params.text.slice(0, 80)}…` : params.text
+					params.text.length > 80
+						? `${params.text.slice(0, 80)}…`
+						: params.text
+				const actionLabel =
+					result.action === "updated"
+						? `Updated (v${result.version})`
+						: "Stored"
 
 				return {
-					content: [{ type: "text" as const, text: `Stored: "${preview}"` }],
+					content: [
+						{
+							type: "text" as const,
+							text: `${actionLabel}: "${preview}" [${category}]`,
+						},
+					],
 				}
 			},
 		},
