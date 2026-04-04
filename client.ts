@@ -554,13 +554,13 @@ export class SupermemoryClient {
 		let page = 1
 
 		while (true) {
-		// TODO: SDK v4.21.1 documents.list() only supports deprecated containerTags (array).
-		// Migrate to containerTag (singular) when SDK adds it to DocumentListParams.
-		const response = await this.client.documents.list({
-			containerTags: [this.containerTag],
-			limit: 100,
-			page,
-		})
+			// TODO: SDK v4.21.1 documents.list() only supports deprecated containerTags (array).
+			// Migrate to containerTag (singular) when SDK adds it to DocumentListParams.
+			const response = await this.client.documents.list({
+				containerTags: [this.containerTag],
+				limit: 100,
+				page,
+			})
 
 			if (!response.memories || response.memories.length === 0) break
 
