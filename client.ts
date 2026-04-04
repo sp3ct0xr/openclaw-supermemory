@@ -89,6 +89,81 @@ function limitText(text: string, max: number): string {
 	return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+/**
+ * Deduplicate an array of strings, removing exact duplicates and
+ * near-duplicates (strings that are substrings of each other or
+ * share very high token overlap).
+ */
+function deduplicateStrings(items: string[]): string[] {
+	if (items.length <= 1) return items
+
+	const seen = new Set<string>()
+	const result: string[] = []
+
+	for (const item of items) {
+		const normalized = item.trim()
+		if (!normalized) continue
+
+		// Exact duplicate check (case-insensitive)
+		const key = normalized.toLowerCase()
+		if (seen.has(key)) continue
+
+		// Near-duplicate: check if this is a substring of an already-kept item
+		// or if an already-kept item is a substring of this one
+		let isDuplicate = false
+		for (const existing of result) {
+			const existingLower = existing.toLowerCase()
+			if (existingLower.includes(key) || key.includes(existingLower)) {
+				// Keep the longer one
+				if (key.length > existingLower.length) {
+					// Replace the shorter existing entry with this longer one
+					const idx = result.indexOf(existing)
+					if (idx !== -1) {
+						seen.delete(existingLower)
+						result[idx] = normalized
+						seen.add(key)
+					}
+				}
+				isDuplicate = true
+				break
+			}
+
+			// Token overlap check for near-duplicates that aren't substrings
+			const similarity = tokenSimilarity(key, existingLower)
+			if (similarity >= 0.85) {
+				isDuplicate = true
+				break
+			}
+		}
+
+		if (!isDuplicate) {
+			seen.add(key)
+			result.push(normalized)
+		}
+	}
+
+	return result
+}
+
+/**
+ * Compute Jaccard similarity between two strings based on word tokens.
+ * Returns a value between 0 and 1.
+ */
+function tokenSimilarity(a: string, b: string): number {
+	const tokensA = new Set(a.split(/\s+/).filter(Boolean))
+	const tokensB = new Set(b.split(/\s+/).filter(Boolean))
+	if (tokensA.size === 0 && tokensB.size === 0) return 1
+	if (tokensA.size === 0 || tokensB.size === 0) return 0
+
+	let intersection = 0
+	for (const t of tokensA) {
+		if (tokensB.has(t)) intersection++
+	}
+
+	const union = tokensA.size + tokensB.size - intersection
+	return union === 0 ? 0 : intersection / union
+}
+
 export class SupermemoryClient {
 	private client: Supermemory
 	private containerTag: string
@@ -299,8 +374,8 @@ export class SupermemoryClient {
 		log.debugResponse("profile.raw", response)
 
 		const result: ProfileResult = {
-			static: response.profile?.static ?? [],
-			dynamic: response.profile?.dynamic ?? [],
+			static: deduplicateStrings(response.profile?.static ?? []),
+			dynamic: deduplicateStrings(response.profile?.dynamic ?? []),
 			searchResults: (response.searchResults?.results ??
 				[]) as ProfileSearchResult[],
 		}
