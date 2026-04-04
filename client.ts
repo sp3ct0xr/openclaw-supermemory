@@ -11,12 +11,26 @@ import {
 	clampEntityContext,
 } from "./memory.ts"
 
+export type VersionChainContext = {
+	memory: string
+	relation: "updates" | "extends" | "derives"
+	updatedAt: string
+	metadata?: Record<string, unknown> | null
+	version?: number | null
+}
+
 export type SearchResult = {
 	id: string
 	content: string
 	memory?: string
 	similarity?: number
 	metadata?: Record<string, unknown>
+	/** Version number of this memory entry (from version chain) */
+	version?: number | null
+	/** Parent memories in the version chain */
+	parents?: VersionChainContext[]
+	/** Child memories in the version chain */
+	children?: VersionChainContext[]
 }
 
 export type ProfileSearchResult = {
@@ -142,6 +156,9 @@ export class SupermemoryClient {
 			memory: r.memory,
 			similarity: r.similarity,
 			metadata: r.metadata ?? undefined,
+			version: r.version ?? undefined,
+			parents: r.context?.parents ?? undefined,
+			children: r.context?.children ?? undefined,
 		}))
 
 		log.debugResponse("search.memories", { count: results.length })

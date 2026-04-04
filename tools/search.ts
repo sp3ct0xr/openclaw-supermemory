@@ -85,7 +85,24 @@ export function registerSearchTool(
 						const score = r.similarity
 							? ` (${(r.similarity * 100).toFixed(0)}%)`
 							: ""
-						return `${i + 1}. ${r.content || r.memory || ""}${score}`
+						const versionTag =
+							r.version != null ? ` [v${r.version}]` : ""
+						const contextParts: string[] = []
+						if (r.parents?.length) {
+							contextParts.push(
+								`   ↑ ${r.parents.length} parent(s): ${r.parents.map((p) => `"${p.memory.slice(0, 60)}…" (${p.relation})`).join(", ")}`,
+							)
+						}
+						if (r.children?.length) {
+							contextParts.push(
+								`   ↓ ${r.children.length} child(ren): ${r.children.map((c) => `"${c.memory.slice(0, 60)}…" (${c.relation})`).join(", ")}`,
+							)
+						}
+						const context =
+							contextParts.length > 0
+								? `\n${contextParts.join("\n")}`
+								: ""
+						return `${i + 1}. ${r.content || r.memory || ""}${score}${versionTag}${context}`
 					})
 					.join("\n")
 
@@ -102,6 +119,9 @@ export function registerSearchTool(
 							id: r.id,
 							content: r.content,
 							similarity: r.similarity,
+							...(r.version != null && { version: r.version }),
+							...(r.parents?.length && { parents: r.parents }),
+							...(r.children?.length && { children: r.children }),
 						})),
 					},
 				}
