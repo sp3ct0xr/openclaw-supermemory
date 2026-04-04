@@ -531,7 +531,7 @@ export class SupermemoryClient {
 		}
 
 		// No high-confidence match — check minimum threshold before fallback
-		const MIN_THRESHOLD = 0.50
+		const MIN_THRESHOLD = 0.75
 		if (results[0].similarity !== undefined && results[0].similarity < MIN_THRESHOLD) {
 			return {
 				success: false,
