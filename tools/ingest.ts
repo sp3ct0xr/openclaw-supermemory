@@ -14,11 +14,11 @@ export function registerIngestTool(
 			name: "supermemory_ingest",
 			label: "Memory Ingest",
 			description:
-				"Ingest content into long-term memory. Accepts URLs (web pages, PDFs, YouTube), raw text, markdown, HTML, or base64-encoded files. Supermemory auto-detects the content type and extracts memories.",
+				"Ingest content into long-term memory. Accepts URLs (web pages, PDFs, YouTube, hosted images) or raw text/markdown/HTML. Supermemory auto-detects the content type and extracts memories.",
 			parameters: Type.Object({
 				content: Type.String({
 					description:
-						"URL (web page, PDF, YouTube video, hosted image) or raw text/markdown/HTML to ingest. Supermemory auto-detects format.",
+						"URL (web page, PDF, YouTube video, hosted image) or raw text/markdown/HTML to ingest. Supermemory auto-detects format. For URLs, Supermemory fetches and processes server-side. Text is clamped at ~100k chars.",
 				}),
 				customId: Type.Optional(
 					Type.String({

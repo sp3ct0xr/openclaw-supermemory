@@ -792,7 +792,15 @@ export class SupermemoryClient {
 		customId?: string
 		containerTag?: string
 	}): Promise<{ id: string; status: string }> {
-		log.debugRequest("documents.update", { id, ...params })
+		log.debugRequest("documents.update", {
+			id,
+			...(params.content !== undefined && {
+				contentLength: params.content.length,
+			}),
+			...(params.metadata && { metadataKeys: Object.keys(params.metadata) }),
+			...(params.customId && { customId: params.customId }),
+			...(params.containerTag && { containerTag: params.containerTag }),
+		})
 		const result = await this.client.documents.update(id, {
 			...(params.content && { content: params.content }),
 			...(params.metadata && { metadata: params.metadata }),
@@ -828,6 +836,39 @@ export class SupermemoryClient {
 				updatedAt: d.updatedAt,
 			})),
 			totalCount: response.totalCount,
+		}
+	}
+
+	/** List documents with full SDK params (sort, order, filters, includeContent). */
+	async listDocuments(opts?: {
+		page?: number
+		limit?: number
+		sort?: "createdAt" | "updatedAt"
+		order?: "asc" | "desc"
+		includeContent?: boolean
+		containerTag?: string
+	}): Promise<{
+		documents: Array<Record<string, unknown>>
+		pagination: { currentPage: number; totalPages: number; totalItems: number }
+	}> {
+		const tag = opts?.containerTag ?? this.containerTag
+		log.debugRequest("documents.list", { tag, ...opts })
+		const response = await this.client.documents.list({
+			containerTags: [tag],
+			...(opts?.page && { page: opts.page }),
+			...(opts?.limit && { limit: opts.limit }),
+			...(opts?.sort && { sort: opts.sort }),
+			...(opts?.order && { order: opts.order }),
+			...(opts?.includeContent !== undefined && { includeContent: opts.includeContent }),
+		})
+		log.debugResponse("documents.list", { count: response.memories?.length ?? 0 })
+		return {
+			documents: (response.memories ?? []) as unknown as Array<Record<string, unknown>>,
+			pagination: {
+				currentPage: response.pagination?.currentPage ?? 1,
+				totalPages: response.pagination?.totalPages ?? 1,
+				totalItems: response.pagination?.totalItems ?? 0,
+			},
 		}
 	}
 

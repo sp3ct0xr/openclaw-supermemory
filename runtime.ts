@@ -118,7 +118,16 @@ export function buildPromptSection(params: {
 	const hasProfile = params.availableTools.has("supermemory_profile")
 	const hasIngest = params.availableTools.has("supermemory_ingest")
 	const hasSettings = params.availableTools.has("supermemory_settings")
-	if (!hasSearch && !hasStore && !hasForget && !hasProfile) return []
+	if (
+		!hasSearch &&
+		!hasStore &&
+		!hasUpdate &&
+		!hasForget &&
+		!hasProfile &&
+		!hasIngest &&
+		!hasSettings
+	)
+		return []
 
 	const lines: string[] = [
 		"## Memory (Supermemory)",
@@ -191,7 +200,7 @@ export function buildPromptSection(params: {
 			"- Text: plaintext, markdown, HTML, JSON, CSV",
 			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
 			"",
-			"**Limits:** Text 1MB, URLs fetched content 10MB, files 50MB",
+			"**Limits:** Text content is clamped at ~100k chars by the plugin. URLs: Supermemory fetches up to 10MB server-side. Binary file uploads via SDK: 50MB max.",
 			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
 			"",
 		)

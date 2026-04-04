@@ -120,16 +120,14 @@ export function registerDocumentsTool(
 						`documents tool: list page=${page} limit=${limit} sort=${params.sort ?? "default"} order=${params.order ?? "default"}`,
 					)
 
-					// Use the raw client for full list params
-					const response = await (client as any).client.documents.list({
-						containerTags: [client.getContainerTag()],
+					const response = await client.listDocuments({
 						page,
 						limit,
-						...(params.sort && { sort: params.sort }),
-						...(params.order && { order: params.order }),
+						...(params.sort && { sort: params.sort as "createdAt" | "updatedAt" }),
+						...(params.order && { order: params.order as "asc" | "desc" }),
 					})
 
-					const docs = response.memories ?? []
+					const docs = response.documents
 					const pagination = response.pagination
 
 					if (docs.length === 0) {
