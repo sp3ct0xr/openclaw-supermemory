@@ -22,6 +22,12 @@ export function registerForgetTool(
 				memoryId: Type.Optional(
 					Type.String({ description: "Direct memory ID to delete" }),
 				),
+				reason: Type.Optional(
+					Type.String({
+						description:
+							"Reason for forgetting this memory (for audit trail)",
+					}),
+				),
 				containerTag: Type.Optional(
 					Type.String({
 						description:
@@ -31,13 +37,22 @@ export function registerForgetTool(
 			}),
 			async execute(
 				_toolCallId: string,
-				params: { query?: string; memoryId?: string; containerTag?: string },
+				params: {
+					query?: string
+					memoryId?: string
+					reason?: string
+					containerTag?: string
+				},
 			) {
 				if (params.memoryId) {
 					log.debug(
-						`forget tool: direct delete id="${params.memoryId}" containerTag="${params.containerTag ?? "default"}"`,
+						`forget tool: direct delete id="${params.memoryId}" reason="${params.reason ?? "none"}" containerTag="${params.containerTag ?? "default"}"`,
 					)
-					await client.deleteMemory(params.memoryId, params.containerTag)
+					await client.deleteMemory(
+						params.memoryId,
+						params.containerTag,
+						params.reason,
+					)
 					return {
 						content: [{ type: "text" as const, text: "Memory forgotten." }],
 					}
@@ -45,7 +60,7 @@ export function registerForgetTool(
 
 				if (params.query) {
 					log.debug(
-						`forget tool: search-then-delete query="${params.query}" containerTag="${params.containerTag ?? "default"}"`,
+						`forget tool: search-then-delete query="${params.query}" reason="${params.reason ?? "none"}" containerTag="${params.containerTag ?? "default"}"`,
 					)
 					const result = await client.forgetByQuery(
 						params.query,

@@ -98,6 +98,7 @@ export function buildSessionBuffer(
 				content: texts.join("\n\n"),
 				metadata: {
 					source: "openclaw" as const,
+					documentDate: now,
 					timestamp: now,
 					turnIndex: idx,
 				},

@@ -25,6 +25,12 @@ export function registerStoreTool(
 				category: Type.Optional(
 					Type.Unsafe<string>({ type: "string", enum: [...MEMORY_CATEGORIES] }),
 				),
+				eventDate: Type.Optional(
+					Type.String({
+						description:
+							"ISO 8601 date of when the event being remembered occurred (e.g. '2026-04-01'). Auto-detected if omitted.",
+					}),
+				),
 				containerTag: Type.Optional(
 					Type.String({
 						description:
@@ -34,19 +40,30 @@ export function registerStoreTool(
 			}),
 			async execute(
 				_toolCallId: string,
-				params: { text: string; category?: string; containerTag?: string },
+				params: {
+					text: string
+					category?: string
+					eventDate?: string
+					containerTag?: string
+				},
 			) {
 				const category = params.category ?? detectCategory(params.text)
 				const sk = getSessionKey()
 				const customId = sk ? buildDocumentId(sk) : undefined
+				const now = new Date().toISOString()
 
 				log.debug(
-					`store tool: category="${category}" customId="${customId}" containerTag="${params.containerTag ?? "default"}"`,
+					`store tool: category="${category}" customId="${customId}" containerTag="${params.containerTag ?? "default"}" eventDate="${params.eventDate ?? "none"}"`,
 				)
 
 				await client.addMemory(
 					params.text,
-					{ type: category, source: "openclaw_tool" },
+					{
+						type: category,
+						source: "openclaw_tool",
+						documentDate: now,
+						...(params.eventDate && { eventDate: params.eventDate }),
+					},
 					customId,
 					params.containerTag,
 					cfg.entityContext,

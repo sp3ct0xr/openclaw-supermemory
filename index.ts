@@ -18,6 +18,7 @@ import { registerForgetTool } from "./tools/forget.ts"
 import { registerProfileTool } from "./tools/profile.ts"
 import { registerSearchTool } from "./tools/search.ts"
 import { registerStoreTool } from "./tools/store.ts"
+import { registerUpdateTool } from "./tools/update.ts"
 
 try {
 	const stateDir =
@@ -74,6 +75,7 @@ export default {
 
 		registerSearchTool(api, client, cfg)
 		registerStoreTool(api, client, cfg, getSessionKey)
+		registerUpdateTool(api, client, cfg)
 		registerForgetTool(api, client, cfg)
 		registerProfileTool(api, client, cfg)
 

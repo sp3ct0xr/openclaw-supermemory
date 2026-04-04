@@ -146,19 +146,79 @@ export class SupermemoryClient {
 		return result
 	}
 
+	async updateMemory(params: {
+		newContent: string
+		containerTag?: string
+		id?: string
+		content?: string
+		temporalContext?: {
+			documentDate?: string | null
+			eventDate?: string[] | null
+		}
+		forgetAfter?: string | null
+		forgetReason?: string | null
+		metadata?: Record<string, string | number | boolean | string[]>
+	}): Promise<{
+		id: string
+		memory: string
+		version: number
+		rootMemoryId: string | null
+		parentMemoryId: string | null
+	}> {
+		const tag = params.containerTag ?? this.containerTag
+
+		log.debugRequest("memories.updateMemory", {
+			id: params.id,
+			contentMatch: params.content ? `${params.content.slice(0, 50)}…` : undefined,
+			newContentLength: params.newContent.length,
+			containerTag: tag,
+			temporalContext: params.temporalContext,
+			forgetAfter: params.forgetAfter,
+		})
+
+		const result = await this.client.memories.updateMemory({
+			containerTag: tag,
+			newContent: sanitizeContent(params.newContent),
+			...(params.id && { id: params.id }),
+			...(params.content && { content: params.content }),
+			...(params.temporalContext && { temporalContext: params.temporalContext }),
+			...(params.forgetAfter !== undefined && { forgetAfter: params.forgetAfter }),
+			...(params.forgetReason !== undefined && { forgetReason: params.forgetReason }),
+			...(params.metadata && { metadata: params.metadata }),
+		})
+
+		log.debugResponse("memories.updateMemory", {
+			id: result.id,
+			version: result.version,
+			rootMemoryId: result.rootMemoryId,
+			parentMemoryId: result.parentMemoryId,
+		})
+
+		return {
+			id: result.id,
+			memory: result.memory,
+			version: result.version,
+			rootMemoryId: result.rootMemoryId,
+			parentMemoryId: result.parentMemoryId,
+		}
+	}
+
 	async deleteMemory(
 		id: string,
 		containerTag?: string,
+		reason?: string,
 	): Promise<{ id: string; forgotten: boolean }> {
 		const tag = containerTag ?? this.containerTag
 
 		log.debugRequest("memories.delete", {
 			id,
 			containerTag: tag,
+			reason,
 		})
 		const result = await this.client.memories.forget({
 			containerTag: tag,
 			id,
+			...(reason && { reason }),
 		})
 		log.debugResponse("memories.delete", result)
 		return result
