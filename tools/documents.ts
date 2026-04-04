@@ -14,18 +14,42 @@ export function registerDocumentsTool(
 			name: "supermemory_documents",
 			label: "Document Management",
 			description:
-				"Manage ingested documents. Use action='get' to inspect a document, 'list' to browse/filter documents, 'processing' to see pipeline status, 'delete' to remove a document.",
+				"Manage ingested documents. Actions: get, list, processing, update, upload, delete.",
 			parameters: Type.Object({
 				action: Type.Unsafe<string>({
 					type: "string",
-					enum: ["get", "list", "processing", "delete"],
+					enum: ["get", "list", "processing", "update", "upload", "delete"],
 					description:
-						"'get': inspect document by ID. 'list': browse documents with filters. 'processing': show documents in pipeline. 'delete': remove document by ID.",
+						"'get': inspect document by ID. 'list': browse documents. 'processing': pipeline status. 'update': update document content/metadata by ID. 'upload': upload a local file. 'delete': remove document by ID.",
 				}),
 				documentId: Type.Optional(
 					Type.String({
 						description:
-							"Document ID — required for 'get' and 'delete' actions.",
+							"Document ID — required for 'get', 'update', and 'delete' actions.",
+					}),
+				),
+				content: Type.Optional(
+					Type.String({
+						description:
+							"New content for 'update' action.",
+					}),
+				),
+				filePath: Type.Optional(
+					Type.String({
+						description:
+							"Local file path for 'upload' action. Supports PDF, images, audio, video (50MB max).",
+					}),
+				),
+				fileType: Type.Optional(
+					Type.String({
+						description:
+							"Override file type for 'upload' (e.g. 'pdf', 'image', 'video', 'audio').",
+					}),
+				),
+				mimeType: Type.Optional(
+					Type.String({
+						description:
+							"MIME type for 'upload' — required for image/video (e.g. 'image/png', 'video/mp4').",
 					}),
 				),
 				page: Type.Optional(
@@ -65,6 +89,10 @@ export function registerDocumentsTool(
 				params: {
 					action: string
 					documentId?: string
+					content?: string
+					filePath?: string
+					fileType?: string
+					mimeType?: string
 					page?: number
 					limit?: number
 					sort?: string
@@ -207,6 +235,83 @@ export function registerDocumentsTool(
 					}
 				}
 
+				// --- UPDATE ---
+				if (params.action === "update") {
+					if (!params.documentId) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "documentId is required for 'update' action.",
+								},
+							],
+						}
+					}
+					if (!params.content) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "content is required for 'update' action.",
+								},
+							],
+						}
+					}
+
+					log.debug(
+						`documents tool: update id=${params.documentId} contentLength=${params.content.length}`,
+					)
+					const updateResult = await client.updateDocument(
+						params.documentId,
+						{ content: params.content },
+					)
+
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Updated document ${updateResult.id} — status: ${updateResult.status}`,
+							},
+						],
+						details: updateResult,
+					}
+				}
+
+				// --- UPLOAD ---
+				if (params.action === "upload") {
+					if (!params.filePath) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "filePath is required for 'upload' action.",
+								},
+							],
+						}
+					}
+
+					log.debug(
+						`documents tool: upload filePath=${params.filePath} fileType=${params.fileType ?? "auto"} mimeType=${params.mimeType ?? "auto"}`,
+					)
+					const uploadResult = await client.uploadFile(
+						params.filePath,
+						{
+							...(params.fileType && { fileType: params.fileType }),
+							...(params.mimeType && { mimeType: params.mimeType }),
+						},
+					)
+
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Uploaded ${params.filePath} — document ID: ${uploadResult.id}, status: ${uploadResult.status}`,
+							},
+						],
+						details: uploadResult,
+					}
+				}
+
 				// --- DELETE ---
 				if (params.action === "delete") {
 					if (!params.documentId) {
@@ -250,7 +355,7 @@ export function registerDocumentsTool(
 					content: [
 						{
 							type: "text" as const,
-							text: "Invalid action. Use 'get', 'list', 'processing', or 'delete'.",
+					text: "Invalid action. Use 'get', 'list', 'processing', 'update', 'upload', or 'delete'.",
 						},
 					],
 				}
