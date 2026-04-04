@@ -174,7 +174,9 @@ export function buildPromptSection(params: {
 	if (hasForget) {
 		lines.push(
 			"### Forgetting memories",
-			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\". Provide a descriptive query or the memory ID to target the closest match.",
+			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\".",
+			"",
+			"**Params:** `memoryId` (direct delete) or `query` (search-then-delete the closest match). Optional: `reason` (audit trail), `containerTag`.",
 			"",
 		)
 	}
@@ -199,12 +201,25 @@ export function buildPromptSection(params: {
 			"### Profile inspection",
 			"Use supermemory_profile to see a full summary of what is known about the user if you need an overview beyond what was auto-injected.",
 			"",
+			"**Params:** Optional `query` to scope profile search results. Optional `containerTag`.",
+			"",
+		)
+	}
+	if (params.availableTools.has("supermemory_documents")) {
+		lines.push(
+			"### Document management",
+			"Use supermemory_documents to inspect, browse, or delete ingested documents.",
+			"",
+			"**Actions:** `action: 'get'` + `documentId` to inspect a document (content, summary, status). `action: 'list'` to browse with `sort`/`order`/`page`/`limit`. `action: 'processing'` to see pipeline status. `action: 'delete'` + `documentId` to remove.",
+			"",
 		)
 	}
 	if (hasSettings) {
 		lines.push(
 			"### Platform settings",
-			"Use supermemory_settings to view or update org-level settings (filterPrompt, shouldLLMFilter, chunkSize).",
+			"Use supermemory_settings to view or update org-level settings.",
+			"",
+			"**Params:** `action: 'get'` to view current settings. `action: 'update'` with `filterPrompt` (org-wide extraction prompt), `shouldLLMFilter` (toggle LLM filtering), `chunkSize` (memory granularity, -1 for default or 64-8192).",
 			"",
 		)
 	}
