@@ -70,13 +70,13 @@ export function registerIngestTool(
 				let result: { id: string }
 
 				if (isBase64) {
-					// Base64 content: use raw client.add() to bypass sanitizeContent
+					// Base64 content: use addRawContent() to bypass sanitizeContent
 					// which would truncate at 100k chars and corrupt the payload
-					result = await (client as any).client.add({
+					result = await client.addRawContent({
 						content: params.content,
-						...(tag && { containerTag: tag }),
-						...(params.customId && { customId: params.customId }),
-						...(cfg.entityContext && { entityContext: cfg.entityContext }),
+						containerTag: tag,
+						customId: params.customId,
+						entityContext: cfg.entityContext,
 						metadata: {
 							source: "openclaw_ingest",
 							documentDate: new Date().toISOString(),

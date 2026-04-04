@@ -747,6 +747,32 @@ export class SupermemoryClient {
 		}
 	}
 
+	/** Add raw content directly to Supermemory, bypassing sanitizeContent.
+	 *  Used for base64 payloads that would be corrupted by the 100k char truncation. */
+	async addRawContent(params: {
+		content: string
+		containerTag?: string
+		customId?: string
+		entityContext?: string
+		metadata?: Record<string, string | number | boolean>
+	}): Promise<{ id: string }> {
+		const tag = params.containerTag ?? this.containerTag
+		log.debugRequest("add.raw", {
+			contentLength: params.content.length,
+			containerTag: tag,
+			customId: params.customId,
+		})
+		const result = await this.client.add({
+			content: params.content,
+			containerTag: tag,
+			...(params.customId && { customId: params.customId }),
+			...(params.entityContext && { entityContext: params.entityContext }),
+			...(params.metadata && { metadata: params.metadata }),
+		})
+		log.debugResponse("add.raw", { id: result.id })
+		return { id: result.id }
+	}
+
 	/** Upload a binary file for processing. */
 	async uploadFile(filePath: string, opts?: {
 		fileType?: string
@@ -812,10 +838,17 @@ export class SupermemoryClient {
 	}
 
 	/** Delete a single document by ID. */
-	async deleteDocument(id: string): Promise<void> {
+	async deleteDocument(id: string): Promise<{ success: boolean; error?: string }> {
 		log.debugRequest("documents.delete", { id })
-		await this.client.documents.delete(id)
-		log.debug(`documents.delete: deleted ${id}`)
+		try {
+			await this.client.documents.delete(id)
+			log.debug(`documents.delete: deleted ${id}`)
+			return { success: true }
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err)
+			log.warn(`documents.delete failed for ${id}: ${message}`)
+			return { success: false, error: message }
+		}
 	}
 
 	/** List documents currently being processed. */
@@ -863,6 +896,8 @@ export class SupermemoryClient {
 		})
 		log.debugResponse("documents.list", { count: response.memories?.length ?? 0 })
 		return {
+			// SDK returns `memories` field from documents.list() — not `documents`.
+			// This is the SDK's naming convention, not a bug.
 			documents: (response.memories ?? []) as unknown as Array<Record<string, unknown>>,
 			pagination: {
 				currentPage: response.pagination?.currentPage ?? 1,

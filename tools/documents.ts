@@ -53,6 +53,12 @@ export function registerDocumentsTool(
 						description: "Sort order for 'list' action",
 					}),
 				),
+				containerTag: Type.Optional(
+					Type.String({
+						description:
+							"Container tag to scope the 'list' action. Defaults to the plugin's container.",
+					}),
+				),
 			}),
 			async execute(
 				_toolCallId: string,
@@ -63,6 +69,7 @@ export function registerDocumentsTool(
 					limit?: number
 					sort?: string
 					order?: string
+					containerTag?: string
 				},
 			) {
 				// --- GET ---
@@ -125,6 +132,7 @@ export function registerDocumentsTool(
 						limit,
 						...(params.sort && { sort: params.sort as "createdAt" | "updatedAt" }),
 						...(params.order && { order: params.order as "asc" | "desc" }),
+						...(params.containerTag && { containerTag: params.containerTag }),
 					})
 
 					const docs = response.documents
@@ -215,7 +223,18 @@ export function registerDocumentsTool(
 					log.debug(
 						`documents tool: delete id=${params.documentId}`,
 					)
-					await client.deleteDocument(params.documentId)
+					const deleteResult = await client.deleteDocument(params.documentId)
+
+					if (!deleteResult.success) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Failed to delete document ${params.documentId}: ${deleteResult.error}`,
+								},
+							],
+						}
+					}
 
 					return {
 						content: [
