@@ -157,8 +157,8 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 				: undefined,
 		// Default shouldLLMFilter to true when filterPrompt is set
 		shouldLLMFilter:
-			cfg.shouldLLMFilter !== undefined
-				? (cfg.shouldLLMFilter as boolean)
+			typeof cfg.shouldLLMFilter === "boolean"
+				? cfg.shouldLLMFilter
 				: typeof cfg.filterPrompt === "string" && cfg.filterPrompt.trim()
 					? true
 					: undefined,

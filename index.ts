@@ -89,7 +89,11 @@ export default {
 					...(cfg.shouldLLMFilter !== undefined && { shouldLLMFilter: cfg.shouldLLMFilter }),
 				})
 				.then(() => api.logger.info("supermemory: org settings synced from config"))
-				.catch((err) => api.logger.warn(`supermemory: failed to sync org settings: ${err}`))
+				.catch((err) =>
+					api.logger.warn(
+						`supermemory: failed to sync org settings: ${err instanceof Error ? err.message : String(err)}`,
+					),
+				)
 		}
 
 		if (cfg.autoRecall) {

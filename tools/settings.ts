@@ -87,13 +87,29 @@ export function registerSettingsTool(
 						}
 					}
 
-					log.debug("settings tool: updating settings", params)
+					// Auto-enable shouldLLMFilter when filterPrompt is set
+					// (otherwise the server ignores the prompt)
+					const effectiveShouldLLMFilter =
+						params.shouldLLMFilter ??
+						(params.filterPrompt !== undefined ? true : undefined)
+
+					log.debug("settings tool: updating settings", {
+						updatedKeys: [
+							...(params.filterPrompt !== undefined ? ["filterPrompt"] : []),
+							...(effectiveShouldLLMFilter !== undefined ? ["shouldLLMFilter"] : []),
+							...(params.chunkSize !== undefined ? ["chunkSize"] : []),
+						],
+						...(params.filterPrompt !== undefined && {
+							filterPromptLength: params.filterPrompt.length,
+						}),
+					})
+
 					const updated = await client.updateSettings({
 						...(params.filterPrompt !== undefined && {
 							filterPrompt: params.filterPrompt,
 						}),
-						...(params.shouldLLMFilter !== undefined && {
-							shouldLLMFilter: params.shouldLLMFilter,
+						...(effectiveShouldLLMFilter !== undefined && {
+							shouldLLMFilter: effectiveShouldLLMFilter,
 						}),
 						...(params.chunkSize !== undefined && {
 							chunkSize: params.chunkSize,
@@ -102,13 +118,23 @@ export function registerSettingsTool(
 
 					const parts: string[] = []
 					if (updated.filterPrompt !== undefined)
-						parts.push(`filterPrompt: "${updated.filterPrompt}"`)
+						parts.push(
+							updated.filterPrompt === null
+								? "filterPrompt: (cleared)"
+								: `filterPrompt: "${updated.filterPrompt}"`,
+						)
 					if (updated.shouldLLMFilter !== undefined)
 						parts.push(
-							`shouldLLMFilter: ${updated.shouldLLMFilter}`,
+							updated.shouldLLMFilter === null
+								? "shouldLLMFilter: (default)"
+								: `shouldLLMFilter: ${updated.shouldLLMFilter}`,
 						)
 					if (updated.chunkSize !== undefined)
-						parts.push(`chunkSize: ${updated.chunkSize}`)
+						parts.push(
+							updated.chunkSize === null
+								? "chunkSize: (default)"
+								: `chunkSize: ${updated.chunkSize}`,
+						)
 
 					return {
 						content: [

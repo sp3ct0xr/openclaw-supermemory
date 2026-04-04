@@ -686,13 +686,33 @@ export class SupermemoryClient {
 		shouldLLMFilter?: boolean | null
 		chunkSize?: number | null
 	}> {
-		log.debugRequest("settings.update", params)
+		log.debugRequest("settings.update", {
+			...(params.filterPrompt !== undefined && {
+				filterPrompt: params.filterPrompt
+					? `${params.filterPrompt.slice(0, 50)}…`
+					: params.filterPrompt,
+			}),
+			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
+			...(params.chunkSize !== undefined && { chunkSize: params.chunkSize }),
+		})
 		const response = await this.client.settings.update({
 			...(params.filterPrompt !== undefined && { filterPrompt: params.filterPrompt }),
 			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
 			...(params.chunkSize !== undefined && { chunkSize: params.chunkSize }),
 		})
-		log.debugResponse("settings.update", response.updated)
+		log.debugResponse("settings.update", {
+			...(response.updated.filterPrompt !== undefined && {
+				filterPrompt: response.updated.filterPrompt
+					? `${response.updated.filterPrompt.slice(0, 50)}…`
+					: response.updated.filterPrompt,
+			}),
+			...(response.updated.shouldLLMFilter !== undefined && {
+				shouldLLMFilter: response.updated.shouldLLMFilter,
+			}),
+			...(response.updated.chunkSize !== undefined && {
+				chunkSize: response.updated.chunkSize,
+			}),
+		})
 		return {
 			filterPrompt: response.updated.filterPrompt,
 			shouldLLMFilter: response.updated.shouldLLMFilter,
