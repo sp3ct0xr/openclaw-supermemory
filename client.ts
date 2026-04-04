@@ -231,8 +231,8 @@ export class SupermemoryClient {
 	/** Deep search via search.documents() — returns chunk-level results with reranking. */
 	async deepSearch(
 		query: string,
-		limit = 5,
 		opts?: {
+			limit?: number
 			rerank?: boolean
 			rewriteQuery?: boolean
 			filters?: Record<string, unknown>
@@ -242,6 +242,7 @@ export class SupermemoryClient {
 			containerTags?: string[]
 		},
 	): Promise<DeepSearchResult[]> {
+		const limit = opts?.limit ?? 5
 		log.debugRequest("search.documents", {
 			query,
 			limit,
