@@ -506,11 +506,29 @@ export class SupermemoryClient {
 	): Promise<{ success: boolean; message: string }> {
 		log.debugRequest("forgetByQuery", { query, containerTag })
 
-		const results = await this.search(query, 5, containerTag)
+		const results = await this.search(query, 10, containerTag)
 		if (results.length === 0) {
 			return { success: false, message: "No matching memory found to forget." }
 		}
 
+		const HIGH_THRESHOLD = 0.80
+		const highConfidence = results.filter((r) => r.score >= HIGH_THRESHOLD)
+
+		if (highConfidence.length > 0) {
+			// Delete all high-confidence matches
+			for (const target of highConfidence) {
+				await this.deleteMemory(target.id, containerTag)
+			}
+			const previews = highConfidence
+				.map((r) => limitText(r.content || r.memory || "", 60))
+				.join("", "")
+			return {
+				success: true,
+				message: `Forgot ${highConfidence.length} memor${highConfidence.length === 1 ? "y" : "ies"}: ${previews}`,
+			}
+		}
+
+		// No high-confidence match — fall back to deleting the best match only
 		const target = results[0]
 		await this.deleteMemory(target.id, containerTag)
 
