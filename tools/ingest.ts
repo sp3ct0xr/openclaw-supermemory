@@ -6,6 +6,15 @@ import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
+// ---------- workspace boundary ----------
+
+const WORKSPACE_DIR = '/data/.openclaw/workspace'
+
+function isInsideWorkspace(filePath: string): boolean {
+	const resolved = fs.realpathSync(filePath)
+	return resolved.startsWith(WORKSPACE_DIR + '/') || resolved === WORKSPACE_DIR
+}
+
 // ---------- local-file helpers ----------
 
 const TEXT_EXTENSIONS = new Set([
@@ -102,6 +111,10 @@ export function registerIngestTool(
 				if (looksLikeLocalPath(content)) {
 					const resolved = resolvePath(content)
 					if (fs.existsSync(resolved)) {
+						if (!isInsideWorkspace(resolved)) {
+							log.warn(`supermemory_ingest: path outside workspace, skipping file read: ${resolved}`)
+							// fall through to treat as plain text
+						} else {
 						localFilePath = resolved
 						const ext = path.extname(resolved).toLowerCase()
 						const mime = BINARY_EXTENSIONS[ext]
@@ -115,6 +128,7 @@ export function registerIngestTool(
 							// Text file (known text ext OR unknown ext → default to text)
 							content = fs.readFileSync(resolved, "utf-8")
 							log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
+						}
 						}
 					} else {
 						log.debug(`ingest: path-like content but file not found: ${resolved}`)
