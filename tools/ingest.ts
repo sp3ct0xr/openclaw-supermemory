@@ -84,15 +84,12 @@ export function registerIngestTool(
 	// Uses SDK's api.runtime.agent.resolveAgentWorkspaceDir() when available.
 	let workspaceDir: string | undefined
 	try {
+		// SDK signature: api.runtime.agent.resolveAgentWorkspaceDir(cfg)
+		// Takes only the config object — no agentId param.
 		const cfg_ = (api as any).config ?? api.pluginConfig
 		const runtime = (api as any).runtime
-		const agentId: string | undefined =
-			runtime?.agentId ??
-			runtime?.agent?.resolveDefaultAgentId?.(cfg_)
-		if (cfg_ && agentId) {
-			const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg_, agentId)
-			workspaceDir = raw ? fs.realpathSync(raw) : undefined
-		}
+		const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg_)
+		workspaceDir = raw ? fs.realpathSync(raw) : undefined
 	} catch (err) {
 		log.warn(`supermemory_ingest: workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
 	}
