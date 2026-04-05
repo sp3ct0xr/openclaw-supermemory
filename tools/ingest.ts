@@ -93,9 +93,10 @@ export function registerIngestTool(
 			const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg_, agentId)
 			workspaceDir = raw ? fs.realpathSync(raw) : undefined
 		}
-	} catch {
-		// runtime may not be available in all registration modes
+	} catch (err) {
+		log.warn(`supermemory_ingest: workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
 	}
+	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — fail-closed)"}`)
 
 	function isInsideWorkspace(filePath: string): boolean {
 		if (!workspaceDir) {
@@ -106,10 +107,14 @@ export function registerIngestTool(
 			const resolved = fs.realpathSync(filePath)
 			if (resolved === workspaceDir) return true
 			const rel = path.relative(workspaceDir, resolved)
-			// Must not escape via ".." and must not be an absolute path
-			return !rel.startsWith("..") && !path.isAbsolute(rel)
-		} catch {
-			return false // can't resolve (e.g. broken symlink) = reject
+			const allowed = !rel.startsWith("..") && !path.isAbsolute(rel)
+			if (!allowed) {
+				log.warn(`supermemory_ingest: path rejected — workspaceDir=${workspaceDir} resolved=${resolved} relative=${rel}`)
+			}
+			return allowed
+		} catch (err) {
+			log.warn(`supermemory_ingest: realpathSync failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
+			return false
 		}
 	}
 
