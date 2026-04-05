@@ -311,20 +311,24 @@ export function registerDocumentsTool(
 					log.debug(
 						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected=${detectedMime ?? "none"})`,
 					)
-					const uploadResult = await client.uploadFile(
-						params.filePath,
-						{
-							...(fileType && { fileType }),
-							...(mimeType && { mimeType }),
-							...(params.containerTag && { containerTag: params.containerTag }),
-						},
-					)
+
+					// Read file as base64 and use addRawContent() with contentType
+					// so the SDK processes the file (especially images) instead of
+					// storing raw bytes via uploadFile().
+					const fileBuffer = fs.readFileSync(params.filePath)
+					const base64Content = fileBuffer.toString("base64")
+					const uploadResult = await client.addRawContent({
+						content: base64Content,
+						...(mimeType && { contentType: mimeType }),
+						...(params.containerTag && { containerTag: params.containerTag }),
+						...(params.customId && { customId: params.customId }),
+					})
 
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Uploaded ${params.filePath} — document ID: ${uploadResult.id}, status: ${uploadResult.status}`,
+								text: `Uploaded ${params.filePath} — document ID: ${uploadResult.id}`,
 							},
 						],
 						details: uploadResult,

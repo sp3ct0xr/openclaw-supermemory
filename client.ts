@@ -782,6 +782,7 @@ export class SupermemoryClient {
 	 *  Used for base64 payloads that would be corrupted by the 100k char truncation. */
 	async addRawContent(params: {
 		content: string
+		contentType?: string
 		containerTag?: string
 		customId?: string
 		entityContext?: string
@@ -790,12 +791,14 @@ export class SupermemoryClient {
 		const tag = params.containerTag ?? this.containerTag
 		log.debugRequest("add.raw", {
 			contentLength: params.content.length,
+			contentType: params.contentType,
 			containerTag: tag,
 			customId: params.customId,
 		})
 		const result = await this.client.add({
 			content: params.content,
 			containerTag: tag,
+			...(params.contentType && { contentType: params.contentType }),
 			...(params.customId && { customId: params.customId }),
 			...(params.entityContext && { entityContext: params.entityContext }),
 			...(params.metadata && { metadata: params.metadata }),
