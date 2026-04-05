@@ -137,6 +137,8 @@ export function buildPromptSection(params: {
 		"### What is auto-injected",
 		"Your user profile (persistent facts and recent context) is automatically injected at the start of each session. This gives you baseline knowledge about the user without any tool calls.",
 		"",
+		`### Available tools\n${[...params.availableTools].map((t) => `- \`${t}\``).join("\n")}`,
+		"",
 	]
 
 	if (hasSearch) {
@@ -149,17 +151,17 @@ export function buildPromptSection(params: {
 			"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
 			"4. **Don't guess from profile alone** — the profile is a summary. Search for details when the user asks about specifics.",
 			"",
-			"**Search modes:**",
-			"- `mode: 'fast'` (default) — memory-level search, low latency, good for most queries. Uses hybrid search (memories + document chunks).",
-			"- `mode: 'deep'` — chunk-level document search with reranking and query rewriting. Use for complex or detailed queries where precision matters.",
+			"**Search modes — when to use each:**",
+			"- `mode: 'fast'` (default) — quick recall of single facts, preferences, or recent context. Use when one keyword or phrase identifies what you need.",
+			"- `mode: 'deep'` — multi-document reasoning, vague queries, or 'find everything about X'. Use when fast mode returns too few or irrelevant results.",
 			"",
 			"**Temporal filters:** Use `after` and `before` (ISO dates) to scope search to a time range (e.g. 'what did the user say last week').",
 			"**Reranking:** Use `rerank: true` for better result ordering (+~100ms). Auto-enabled in deep mode.",
 			"",
 			"### Trusting recalled memories",
-			"Memories reflect what was true *when stored*. A memory naming a file, function, or config is a claim it existed at that time — verify it still exists before recommending.",
-			"If a search result shows ⏱ (stale), treat it as a lead to investigate, not a fact to assert.",
-			"When in doubt, check the filesystem or codebase before citing a memory as current fact.",
+			"Memories reflect what was true *when stored*. Treat each result as a historical snapshot, not live state.",
+			"Before acting on a memory that references files, configs, or external state — verify it still exists (read the file, check the repo, etc.).",
+			"If a search result shows ⏱ (stale) or is >30 days old, treat it as a lead to investigate, not a fact to assert.",
 			"",
 		)
 	}
@@ -210,6 +212,7 @@ export function buildPromptSection(params: {
 			"",
 			"**Limits:** Text: ~100k chars (plugin sanitize). URLs: up to 10MB (server-side fetch). Local files: up to 50MB (binary upload). Raw base64: up to 50MB.",
 			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
+			"**Proactive ingestion:** When the user shares a URL, doc, or large text block for discussion, ingest it so future sessions can recall it.",
 			"",
 		)
 	}
