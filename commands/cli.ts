@@ -512,6 +512,8 @@ export function registerCli(
 					console.log(`Wiped ${result.deletedCount} memories from "${tag}".`)
 				})
 		},
-		{ commands: ["supermemory"] },
+		// No { commands: ["supermemory"] } here — the root command is already
+		// registered by registerCliSetup(). This call only adds subcommands
+		// (search, profile, wipe) to the existing root.
 	)
 }
