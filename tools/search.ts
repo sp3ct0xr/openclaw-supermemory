@@ -56,18 +56,14 @@ function formatMemoryResult(r: SearchResult, i: number): string {
 }
 
 function formatDeepResult(r: DeepSearchResult, i: number): string {
-	const title = r.title ? ` — ${r.title}` : ""
+	const tag = r.type === "memory" ? "mem" : "chunk"
 	const score = ` (${(r.score * 100).toFixed(0)}%)`
 	const freshness = formatFreshnessTag(
-		(r.metadata?.documentDate as string | undefined) ?? r.createdAt,
+		(r.metadata?.documentDate as string | undefined) ?? r.updatedAt,
 	)
-	const summary = r.summary ? `\n   Summary: ${r.summary}` : ""
-	const relevantChunks = r.chunks.filter((c) => c.isRelevant)
-	const chunkText =
-		relevantChunks.length > 0
-			? `\n${relevantChunks.map((c, j) => `   [chunk ${j + 1}] ${c.content.slice(0, 200)}${c.content.length > 200 ? "…" : ""}`).join("\n")}`
-			: ""
-	return `${i + 1}. [doc:${r.documentId.slice(0, 8)}]${title}${score}${freshness}${summary}${chunkText}`
+	const preview = r.content.slice(0, 300) + (r.content.length > 300 ? "…" : "")
+	const version = r.version ? ` v${r.version}` : ""
+	return `${i + 1}. [${tag}:${r.id.slice(0, 8)}]${score}${version}${freshness}\n   ${preview}`
 }
 
 export function registerSearchTool(
@@ -88,7 +84,7 @@ export function registerSearchTool(
 						type: "string",
 						enum: ["fast", "deep"],
 						description:
-							"'fast' (default): memory-level search, low latency. 'deep': chunk-level search with reranking and query rewriting, higher quality but slower.",
+							"'fast' (default): memory-level search, low latency. 'deep': chunk-level search with reranking, higher quality but slower.",
 					}),
 				),
 				limit: Type.Optional(
@@ -142,21 +138,16 @@ export function registerSearchTool(
 					`search tool: mode=${mode} query="${params.query}" limit=${limit} after=${params.after ?? "none"} before=${params.before ?? "none"} rerank=${params.rerank ?? "default"}`,
 				)
 
-				// --- Deep mode: search.documents() with chunks ---
+				// --- Deep mode: search.memories() with reranking ---
 				if (mode === "deep") {
 					const deepResults = await client.deepSearch(
 						params.query,
 						{
 							limit,
 							rerank: params.rerank ?? true,
-							rewriteQuery: true,
-							includeSummary: true,
-							searchMode: "hybrid",
 							...(filters && { filters }),
-							// TODO: SDK search.documents() only has deprecated containerTags.
-							// Migrate when SDK adds singular containerTag to SearchDocumentsParams.
 							...(params.containerTag && {
-								containerTags: [params.containerTag],
+								containerTag: params.containerTag,
 							}),
 						},
 					)
@@ -176,33 +167,35 @@ export function registerSearchTool(
 						.map(formatDeepResult)
 						.join("\n")
 
+					const memCount = deepResults.filter((r) => r.type === "memory").length
+					const chunkCount = deepResults.filter((r) => r.type === "chunk").length
+
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Found ${deepResults.length} documents (deep search, reranked):\n\n${text}`,
+								text: `Found ${deepResults.length} results (deep search, reranked — ${memCount} memories, ${chunkCount} chunks):\n\n${text}`,
 							},
 						],
 						details: {
 							count: deepResults.length,
 							mode: "deep",
-							documents: deepResults.map((r) => ({
-								documentId: r.documentId,
-								title: r.title,
+							memoryCount: memCount,
+							chunkCount,
+							results: deepResults.map((r) => ({
+								id: r.id,
+								type: r.type,
 								score: r.score,
-								chunkCount: r.chunks.length,
-								summary: r.summary,
 							})),
 						},
 					}
 				}
 
-				// --- Fast mode: search.memories() with optional enhancements ---
+				// --- Fast mode: search.memories() (defaults to hybrid, no reranking) ---
 				let results: SearchResult[]
 
 				const searchOpts = {
 					...(params.rerank !== undefined && { rerank: params.rerank }),
-					searchMode: "hybrid" as const,
 					...(filters && { filters }),
 				}
 
