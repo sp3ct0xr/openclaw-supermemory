@@ -2,6 +2,7 @@ import type { ProfileSearchResult, SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
+import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../text-similarity.ts"
 
 function formatRelativeTime(isoTimestamp: string): string {
 	try {
@@ -36,6 +37,7 @@ function deduplicateMemories(
 	dynamic: string[]
 	searchResults: ProfileSearchResult[]
 } {
+	// Pass 1: exact-match dedup via Set
 	const seen = new Set<string>()
 
 	const uniqueStatic = staticFacts.filter((m) => {
@@ -57,8 +59,20 @@ function deduplicateMemories(
 		return true
 	})
 
+	// Pass 2: fuzzy dedup via Jaro-Winkler — catches near-dupes like
+	// "User prefers vim" vs "User prefers Vim" that exact match misses.
+	// Only applied to static facts (most likely to have near-dupes from
+	// SM profile extraction). Stricter threshold to avoid dropping distinct memories.
+	const fuzzyDeduped: string[] = []
+	for (const fact of uniqueStatic) {
+		const isDupe = fuzzyDeduped.some(
+			(existing) => textSimilarity(fact, existing) >= RECALL_DEDUP_SIMILARITY_THRESHOLD,
+		)
+		if (!isDupe) fuzzyDeduped.push(fact)
+	}
+
 	return {
-		static: uniqueStatic,
+		static: fuzzyDeduped,
 		dynamic: uniqueDynamic,
 		searchResults: uniqueSearch,
 	}
