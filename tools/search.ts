@@ -84,7 +84,7 @@ export function registerSearchTool(
 						type: "string",
 						enum: ["fast", "deep"],
 						description:
-							"'fast' (default): memory-level search, low latency. 'deep': chunk-level search with reranking and query rewriting, higher quality but slower.",
+							"'fast' (default): memory-level search, low latency. 'deep': chunk-level search with reranking, higher quality but slower.",
 					}),
 				),
 				limit: Type.Optional(
@@ -138,14 +138,13 @@ export function registerSearchTool(
 					`search tool: mode=${mode} query="${params.query}" limit=${limit} after=${params.after ?? "none"} before=${params.before ?? "none"} rerank=${params.rerank ?? "default"}`,
 				)
 
-				// --- Deep mode: search.memories() with hybrid mode ---
+				// --- Deep mode: search.memories() with reranking ---
 				if (mode === "deep") {
 					const deepResults = await client.deepSearch(
 						params.query,
 						{
 							limit,
 							rerank: params.rerank ?? true,
-							rewriteQuery: true,
 							...(filters && { filters }),
 							...(params.containerTag && {
 								containerTag: params.containerTag,
@@ -175,7 +174,7 @@ export function registerSearchTool(
 						content: [
 							{
 								type: "text" as const,
-								text: `Found ${deepResults.length} results (deep hybrid search, reranked — ${memCount} memories, ${chunkCount} chunks):\n\n${text}`,
+								text: `Found ${deepResults.length} results (deep search, reranked — ${memCount} memories, ${chunkCount} chunks):\n\n${text}`,
 							},
 						],
 						details: {
@@ -192,12 +191,11 @@ export function registerSearchTool(
 					}
 				}
 
-				// --- Fast mode: search.memories() with optional enhancements ---
+				// --- Fast mode: search.memories() (defaults to hybrid, no reranking) ---
 				let results: SearchResult[]
 
 				const searchOpts = {
 					...(params.rerank !== undefined && { rerank: params.rerank }),
-					searchMode: "hybrid" as const,
 					...(filters && { filters }),
 				}
 

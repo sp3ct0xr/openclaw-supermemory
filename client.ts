@@ -327,7 +327,7 @@ export class SupermemoryClient {
 		return results
 	}
 
-	/** Deep search via search.memories() with hybrid mode — returns both memories and document chunks. */
+	/** Deep search via search.memories() with reranking — re-scores results with cross-encoder for better relevance. */
 	async deepSearch(
 		query: string,
 		opts?: {
@@ -339,7 +339,7 @@ export class SupermemoryClient {
 		},
 	): Promise<DeepSearchResult[]> {
 		const limit = opts?.limit ?? 5
-		log.debugRequest("search.memories(hybrid)", {
+		log.debugRequest("search.memories(deep)", {
 			query,
 			limit,
 			rerank: opts?.rerank,
@@ -351,8 +351,7 @@ export class SupermemoryClient {
 			q: query,
 			limit,
 			rerank: opts?.rerank ?? true,
-			rewriteQuery: opts?.rewriteQuery ?? true,
-			searchMode: "hybrid",
+			...(opts?.rewriteQuery !== undefined && { rewriteQuery: opts.rewriteQuery }),
 			...(opts?.containerTag && { containerTag: opts.containerTag }),
 			...(opts?.filters && { filters: opts.filters as any }),
 		})
