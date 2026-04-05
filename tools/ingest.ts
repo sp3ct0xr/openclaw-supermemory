@@ -96,7 +96,7 @@ export function registerIngestTool(
 	} catch (err) {
 		log.warn(`supermemory_ingest: workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
 	}
-	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — fail-closed)"}`)
+	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — fail-open, container sandbox is outer guard)"}`)
 
 	function isInsideWorkspace(filePath: string): boolean {
 		if (!workspaceDir) {
