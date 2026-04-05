@@ -231,8 +231,13 @@ export function registerIngestTool(
 					// Agent-provided base64: use addRawContent() to bypass sanitizeContent
 					// which would truncate at 100k chars and corrupt the payload.
 					// NOTE: For local binary files we use uploadFile() above instead.
+					// Extract contentType from data URI prefix if present (e.g. "data:image/png;base64,...")
+					const dataUriMatch = content.match(/^data:([^;,]+)/)
+					const detectedContentType = dataUriMatch?.[1] ?? undefined
+
 					result = await client.addRawContent({
 						content,
+						...(detectedContentType && { contentType: detectedContentType }),
 						containerTag: tag,
 						customId: params.customId,
 						entityContext: cfg.entityContext,

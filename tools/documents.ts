@@ -311,6 +311,7 @@ export function registerDocumentsTool(
 					log.debug(
 						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected=${detectedMime ?? "none"})`,
 					)
+
 					const uploadResult = await client.uploadFile(
 						params.filePath,
 						{
