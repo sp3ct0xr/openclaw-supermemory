@@ -156,6 +156,11 @@ export function buildPromptSection(params: {
 			"**Temporal filters:** Use `after` and `before` (ISO dates) to scope search to a time range (e.g. 'what did the user say last week').",
 			"**Reranking:** Use `rerank: true` for better result ordering (+~100ms). Auto-enabled in deep mode.",
 			"",
+			"### Trusting recalled memories",
+			"Memories reflect what was true *when stored*. A memory naming a file, function, or config is a claim it existed at that time — verify it still exists before recommending.",
+			"If a search result shows ⏱ (stale), treat it as a lead to investigate, not a fact to assert.",
+			"When in doubt, check the filesystem or codebase before citing a memory as current fact.",
+			"",
 		)
 	}
 	if (hasStore) {

@@ -9,11 +9,33 @@ import {
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
+const MS_PER_DAY = 86_400_000
+
+/**
+ * Compute a freshness tag from a date string.
+ * Returns "" if < 7 days or no date, a mild warning for 7-30 days,
+ * and a strong warning for > 30 days.
+ */
+function formatFreshnessTag(
+	dateStr: string | undefined | null,
+): string {
+	if (!dateStr) return ""
+	const stored = new Date(dateStr)
+	if (Number.isNaN(stored.getTime())) return ""
+	const daysAgo = Math.floor((Date.now() - stored.getTime()) / MS_PER_DAY)
+	if (daysAgo < 7) return ""
+	if (daysAgo <= 30) return ` ⏱ ${daysAgo}d ago`
+	return ` ⏱ ${daysAgo}d ago — verify before asserting`
+}
+
 function formatMemoryResult(r: SearchResult, i: number): string {
 	const score = r.similarity
 		? ` (${(r.similarity * 100).toFixed(0)}%)`
 		: ""
 	const versionTag = r.version != null ? ` [v${r.version}]` : ""
+	const freshness = formatFreshnessTag(
+		(r.metadata?.documentDate as string | undefined) ?? undefined,
+	)
 	const contextParts: string[] = []
 	if (r.parents?.length) {
 		contextParts.push(
@@ -27,19 +49,22 @@ function formatMemoryResult(r: SearchResult, i: number): string {
 	}
 	const context =
 		contextParts.length > 0 ? `\n${contextParts.join("\n")}` : ""
-	return `${i + 1}. ${r.content || r.memory || ""}${score}${versionTag}${context}`
+	return `${i + 1}. ${r.content || r.memory || ""}${score}${versionTag}${freshness}${context}`
 }
 
 function formatDeepResult(r: DeepSearchResult, i: number): string {
 	const title = r.title ? ` — ${r.title}` : ""
 	const score = ` (${(r.score * 100).toFixed(0)}%)`
+	const freshness = formatFreshnessTag(
+		(r.metadata?.documentDate as string | undefined) ?? r.createdAt,
+	)
 	const summary = r.summary ? `\n   Summary: ${r.summary}` : ""
 	const relevantChunks = r.chunks.filter((c) => c.isRelevant)
 	const chunkText =
 		relevantChunks.length > 0
 			? `\n${relevantChunks.map((c, j) => `   [chunk ${j + 1}] ${c.content.slice(0, 200)}${c.content.length > 200 ? "…" : ""}`).join("\n")}`
 			: ""
-	return `${i + 1}. [doc:${r.documentId.slice(0, 8)}]${title}${score}${summary}${chunkText}`
+	return `${i + 1}. [doc:${r.documentId.slice(0, 8)}]${title}${score}${freshness}${summary}${chunkText}`
 }
 
 export function registerSearchTool(

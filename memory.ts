@@ -4,6 +4,7 @@ export const MEMORY_CATEGORIES = [
 	"decision",
 	"entity",
 	"correction",
+	"confirmation",
 	"other",
 ] as const
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number]
@@ -15,6 +16,7 @@ export const CATEGORY_CONTAINER_SUFFIX: Record<MemoryCategory, string> = {
 	decision: "decisions",
 	entity: "entities",
 	correction: "corrections",
+	confirmation: "confirmations",
 	other: "", // default container, no suffix
 }
 
@@ -27,6 +29,13 @@ export function detectCategory(text: string): MemoryCategory {
 		)
 	)
 		return "correction"
+	// Confirmations: positive feedback reinforcing validated approaches
+	if (
+		/\b(?:yes[, ]+(?:exactly|that'?s? (?:it|right|correct|perfect|great))|perfect(?:ly)?|exactly (?:right|what i (?:want|need))|keep (?:doing|using) that|that'?s? (?:perfect|great|exactly right))\b/.test(
+			lower,
+		)
+	)
+		return "confirmation"
 	if (/\b(?:prefer|like|love|hate|want|always use|favorite)\b/.test(lower))
 		return "preference"
 	if (/\b(?:decided|will use|going with|let'?s use|we'?ll go with)\b/.test(lower))
@@ -56,12 +65,13 @@ Each memory = ONE fact. Never combine multiple facts into a single memory.
 - GOOD: "User prefers dark mode" + "User uses PostgreSQL" + "User lives in Bangkok"
 
 ### CATEGORIZE each memory
-Assign one: preference | fact | decision | entity | correction
+Assign one: preference | fact | decision | entity | correction | confirmation
 - preference: Explicit likes/dislikes/preferences ("I prefer tabs", "I always use pnpm")
 - fact: Personal details, skills, background ("I work at SpX", "I have a PhD")
 - decision: Project choices ("We'll use PostgreSQL for this", "Going with Cloudflare Workers")
 - entity: Named entities, contacts, identifiers ("My name is PK", emails, phone numbers)
 - correction: User correcting prior information ("No, actually use tabs not spaces")
+- confirmation: User confirming a good approach ("yes exactly", "perfect", "keep doing that")
 
 ### CONFIDENCE levels
 - EXPLICIT: User directly stated it ("I prefer X") — always extract
