@@ -113,20 +113,23 @@ export function registerIngestTool(
 	}
 	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — all file reads blocked)"}`)
 
+	/** Directories allowed for file reads (workspace + /tmp for downloaded files). */
+	const allowedDirs = [workspaceDir, "/tmp"].filter(Boolean) as string[]
+
 	function isInsideWorkspace(filePath: string): boolean {
-		if (!workspaceDir) {
+		if (allowedDirs.length === 0) {
 			log.warn("supermemory_ingest: no workspace boundary resolved — denying file read")
 			return false
 		}
 		try {
 			const resolved = fs.realpathSync(filePath)
-			if (resolved === workspaceDir) return true
-			const rel = path.relative(workspaceDir, resolved)
-			const allowed = !rel.startsWith("..") && !path.isAbsolute(rel)
-			if (!allowed) {
-				log.warn(`supermemory_ingest: path rejected — workspaceDir=${workspaceDir} resolved=${resolved} relative=${rel}`)
+			for (const dir of allowedDirs) {
+				if (resolved === dir) return true
+				const rel = path.relative(dir, resolved)
+				if (!rel.startsWith("..") && !path.isAbsolute(rel)) return true
 			}
-			return allowed
+			log.warn(`supermemory_ingest: path rejected — resolved=${resolved} allowedDirs=[${allowedDirs.join(", ")}]`)
+			return false
 		} catch (err) {
 			log.warn(`supermemory_ingest: realpathSync failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
 			return false
