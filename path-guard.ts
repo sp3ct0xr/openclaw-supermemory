@@ -26,12 +26,11 @@ export function initPathGuard(api: OpenClawPluginApi): void {
 		log.warn(`path-guard: SDK workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
 	}
 
-	// Fallback: try known OpenClaw workspace paths
+	// Fallback: try known OpenClaw workspace paths (no cwd — too broad)
 	if (!workspaceDir) {
 		const fallbackPaths = [
 			"/data/.openclaw/workspace",
 			process.env.OPENCLAW_WORKSPACE_DIR,
-			process.cwd(),
 		].filter(Boolean) as string[]
 		for (const candidate of fallbackPaths) {
 			try {
@@ -44,8 +43,16 @@ export function initPathGuard(api: OpenClawPluginApi): void {
 		}
 	}
 
-	// Build allowed directories list
-	allowedDirs = [workspaceDir, "/tmp"].filter(Boolean) as string[]
+	// Build allowed directories list, resolving symlinks (e.g. /tmp → /private/tmp on macOS)
+	const rawAllowedDirs = [workspaceDir, "/tmp"].filter(Boolean) as string[]
+	allowedDirs = [...new Set(rawAllowedDirs.flatMap((dir) => {
+		try {
+			return [fs.realpathSync(dir)]
+		} catch {
+			log.warn(`path-guard: skipping allowed dir ${dir} (realpath failed)`)
+			return []
+		}
+	}))]
 
 	log.info(`path-guard: workspaceDir=${workspaceDir ?? "(undefined)"} allowedDirs=[${allowedDirs.join(", ")}]`)
 	initialized = true

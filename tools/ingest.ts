@@ -138,57 +138,56 @@ export function registerIngestTool(
 				// --- Local file auto-read ---
 				if (looksLikeLocalPath(content)) {
 					const resolved = resolvePath(content)
+					// SECURITY: check boundary BEFORE existsSync to prevent existence probing
+					if (!isAllowedPath(resolved)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Access denied: file is outside the allowed workspace. Only files in the workspace or /tmp can be ingested.`,
+								},
+							],
+						}
+					}
 					if (fs.existsSync(resolved)) {
-						if (!isAllowedPath(resolved)) {
-							// SECURITY: return error, never send rejected path strings to SM
+						localFilePath = resolved
+						const classification = classifyFile(resolved)
+
+						if (!classification.isText) {
+							// Binary file → route through uploadFile() (client auto-detects MIME)
+							const fileSize = fs.statSync(resolved).size
+							log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${classification.detectedMime})`)
+
+							const uploadResult = await client.uploadFile(resolved, {
+								metadata: buildIngestMetadata(params.metadata, {
+									sourceFile: resolved,
+									...(params.customId && { customId: params.customId }),
+								}),
+								containerTag: tag,
+							})
+
+							const sizeLabel = fileSize > 1024 ? `${(fileSize / 1024).toFixed(0)}KB` : `${fileSize} bytes`
+
 							return {
 								content: [
 									{
 										type: "text" as const,
-										text: `Access denied: ${path.basename(resolved)} is outside the allowed workspace. Only files in the workspace or /tmp can be ingested.`,
+										text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${classification.detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
 									},
 								],
+								details: {
+									id: uploadResult.id,
+									status: uploadResult.status,
+									localFile: resolved,
+								},
 							}
-						} else {
-							localFilePath = resolved
-							const classification = classifyFile(resolved)
-
-							if (!classification.isText) {
-								// Binary file → route through uploadFile() (client auto-detects MIME)
-								const fileSize = fs.statSync(resolved).size
-								log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${classification.detectedMime})`)
-
-								const uploadResult = await client.uploadFile(resolved, {
-									metadata: buildIngestMetadata(params.metadata, {
-										sourceFile: resolved,
-										...(params.customId && { customId: params.customId }),
-									}),
-									containerTag: tag,
-								})
-
-								const sizeLabel = fileSize > 1024 ? `${(fileSize / 1024).toFixed(0)}KB` : `${fileSize} bytes`
-
-								return {
-									content: [
-										{
-											type: "text" as const,
-											text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${classification.detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
-										},
-									],
-									details: {
-										id: uploadResult.id,
-										status: uploadResult.status,
-										localFile: resolved,
-									},
-								}
-							}
-
-							// Text file → read as UTF-8
-							content = fs.readFileSync(resolved, "utf-8")
-							log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
 						}
+
+						// Text file → read as UTF-8
+						content = fs.readFileSync(resolved, "utf-8")
+						log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
 					} else {
-						log.debug(`ingest: path-like content but file not found: ${resolved}`)
+						log.debug(`ingest: path-like content but file not found`)
 					}
 				}
 

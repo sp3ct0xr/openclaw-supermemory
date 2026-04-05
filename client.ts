@@ -810,7 +810,7 @@ export class SupermemoryClient {
 	}): Promise<{ id: string; status: string }> {
 		// Defense in depth: validate path even if caller already checked
 		if (!isAllowedPath(filePath)) {
-			throw new Error(`uploadFile blocked: ${filePath} is outside allowed directories`)
+			throw new Error(`uploadFile blocked: ${path.basename(filePath)} is outside allowed directories`)
 		}
 		const tag = opts?.containerTag ?? this.containerTag
 

@@ -292,24 +292,24 @@ export function registerDocumentsTool(
 						}
 					}
 
-					if (!fs.existsSync(params.filePath)) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `File not found: ${params.filePath}`,
-								},
-							],
-						}
-					}
-
-					// SECURITY: validate path before reading
+					// SECURITY: check boundary BEFORE existsSync to prevent existence probing
 					if (!isAllowedPath(params.filePath)) {
 						return {
 							content: [
 								{
 									type: "text" as const,
 									text: `Access denied: file is outside the allowed workspace. Only files in the workspace or /tmp can be uploaded.`,
+								},
+							],
+						}
+					}
+
+					if (!fs.existsSync(params.filePath)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `File not found.`,
 								},
 							],
 						}
