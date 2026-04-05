@@ -84,18 +84,30 @@ export function registerIngestTool(
 	// Uses SDK's api.runtime.agent.resolveAgentWorkspaceDir() when available.
 	let workspaceDir: string | undefined
 	try {
-		workspaceDir = (api as any).runtime?.agent?.resolveAgentWorkspaceDir?.(
-			(api as any).config ?? api.pluginConfig,
-		)
+		const cfg_ = (api as any).config ?? api.pluginConfig
+		const runtime = (api as any).runtime
+		const agentId: string | undefined =
+			runtime?.agentId ??
+			runtime?.agent?.resolveDefaultAgentId?.(cfg_)
+		if (cfg_ && agentId) {
+			const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg_, agentId)
+			workspaceDir = raw ? fs.realpathSync(raw) : undefined
+		}
 	} catch {
 		// runtime may not be available in all registration modes
 	}
 
 	function isInsideWorkspace(filePath: string): boolean {
-		if (!workspaceDir) return true // no boundary resolved = allow (graceful degradation)
+		if (!workspaceDir) {
+			log.warn("supermemory_ingest: workspace boundary not resolved — denying file read (fail-closed)")
+			return false
+		}
 		try {
 			const resolved = fs.realpathSync(filePath)
-			return resolved.startsWith(workspaceDir + "/") || resolved === workspaceDir
+			if (resolved === workspaceDir) return true
+			const rel = path.relative(workspaceDir, resolved)
+			// Must not escape via ".." and must not be an absolute path
+			return !rel.startsWith("..") && !path.isAbsolute(rel)
 		} catch {
 			return false // can't resolve (e.g. broken symlink) = reject
 		}
