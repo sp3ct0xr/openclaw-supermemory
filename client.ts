@@ -339,6 +339,8 @@ export class SupermemoryClient {
 			includeFullDocs?: boolean
 			includeSummary?: boolean
 			chunkThreshold?: number
+			/** Search mode: 'hybrid' includes both memories and document chunks. */
+			searchMode?: "memories" | "hybrid" | "documents"
 			/** @deprecated SDK v4.21.1 search.documents() only supports containerTags (array).
 			 *  Will migrate to containerTag (singular) when SDK adds it to SearchDocumentsParams. */
 			containerTags?: string[]
@@ -363,7 +365,8 @@ export class SupermemoryClient {
 			...(opts?.includeFullDocs !== undefined && { includeFullDocs: opts.includeFullDocs }),
 			...(opts?.includeSummary !== undefined && { includeSummary: opts.includeSummary }),
 			...(opts?.chunkThreshold !== undefined && { chunkThreshold: opts.chunkThreshold }),
-		})
+			...(opts?.searchMode && { searchMode: opts.searchMode }),
+		} as any)
 
 		const results: DeepSearchResult[] = (response.results ?? []).map((r) => ({
 			documentId: r.documentId,
