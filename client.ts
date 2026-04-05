@@ -9,6 +9,7 @@ import {
 	validateContainerTag,
 } from "./lib/validate.js"
 import { log } from "./logger.ts"
+import { textSimilarity, DEDUP_SIMILARITY_THRESHOLD } from "./text-similarity.ts"
 import {
 	CATEGORY_CONTAINER_SUFFIX,
 	type MemoryCategory,
@@ -117,7 +118,7 @@ function limitText(text: string, max: number): string {
 /**
  * Deduplicate an array of strings, removing exact duplicates and
  * near-duplicates (strings that are substrings of each other or
- * share very high token overlap).
+ * share high Jaro-Winkler similarity).
  */
 function deduplicateStrings(items: string[]): string[] {
 	if (items.length <= 1) return items
@@ -141,7 +142,6 @@ function deduplicateStrings(items: string[]): string[] {
 			if (existingLower.includes(key) || key.includes(existingLower)) {
 				// Keep the longer one
 				if (key.length > existingLower.length) {
-					// Replace the shorter existing entry with this longer one
 					const idx = result.indexOf(existing)
 					if (idx !== -1) {
 						seen.delete(existingLower)
@@ -153,9 +153,8 @@ function deduplicateStrings(items: string[]): string[] {
 				break
 			}
 
-			// Token overlap check for near-duplicates that aren't substrings
-			const similarity = tokenSimilarity(key, existingLower)
-			if (similarity >= 0.85) {
+			// Fuzzy similarity check via Jaro-Winkler (handles typos, case, punctuation)
+			if (textSimilarity(key, existingLower) >= DEDUP_SIMILARITY_THRESHOLD) {
 				isDuplicate = true
 				break
 			}
@@ -168,25 +167,6 @@ function deduplicateStrings(items: string[]): string[] {
 	}
 
 	return result
-}
-
-/**
- * Compute Jaccard similarity between two strings based on word tokens.
- * Returns a value between 0 and 1.
- */
-function tokenSimilarity(a: string, b: string): number {
-	const tokensA = new Set(a.split(/\s+/).filter(Boolean))
-	const tokensB = new Set(b.split(/\s+/).filter(Boolean))
-	if (tokensA.size === 0 && tokensB.size === 0) return 1
-	if (tokensA.size === 0 || tokensB.size === 0) return 0
-
-	let intersection = 0
-	for (const t of tokensA) {
-		if (tokensB.has(t)) intersection++
-	}
-
-	const union = tokensA.size + tokensB.size - intersection
-	return union === 0 ? 0 : intersection / union
 }
 
 export class SupermemoryClient {

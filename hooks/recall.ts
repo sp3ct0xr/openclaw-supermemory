@@ -2,6 +2,7 @@ import type { ProfileSearchResult, SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
+import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../text-similarity.ts"
 
 function formatRelativeTime(isoTimestamp: string): string {
 	try {
@@ -36,29 +37,51 @@ function deduplicateMemories(
 	dynamic: string[]
 	searchResults: ProfileSearchResult[]
 } {
+	// Pass 1: exact-match dedup via Set (case-insensitive)
 	const seen = new Set<string>()
+	const normalizeKey = (s: string) => s.trim().toLowerCase()
 
 	const uniqueStatic = staticFacts.filter((m) => {
-		if (seen.has(m)) return false
-		seen.add(m)
+		const key = normalizeKey(m)
+		if (seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
 	const uniqueDynamic = dynamicFacts.filter((m) => {
-		if (seen.has(m)) return false
-		seen.add(m)
+		const key = normalizeKey(m)
+		if (seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
 	const uniqueSearch = searchResults.filter((r) => {
 		const memory = r.memory ?? ""
-		if (!memory || seen.has(memory)) return false
-		seen.add(memory)
+		const key = normalizeKey(memory)
+		if (!memory || seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
+	// Pass 2: fuzzy dedup via Jaro-Winkler — catches near-dupes like
+	// "User prefers vim" vs "User prefers Vim" that exact match misses.
+	// Only applied to static facts (most likely to have near-dupes from
+	// SM profile extraction). Stricter threshold to avoid dropping distinct memories.
+	const fuzzyDeduped: string[] = []
+	for (const fact of uniqueStatic) {
+		const dupeIdx = fuzzyDeduped.findIndex(
+			(existing) => textSimilarity(fact, existing) >= RECALL_DEDUP_SIMILARITY_THRESHOLD,
+		)
+		if (dupeIdx === -1) {
+			fuzzyDeduped.push(fact)
+		} else if (fact.length > fuzzyDeduped[dupeIdx].length) {
+			// Keep the longer/more informative variant
+			fuzzyDeduped[dupeIdx] = fact
+		}
+	}
+
 	return {
-		static: uniqueStatic,
+		static: fuzzyDeduped,
 		dynamic: uniqueDynamic,
 		searchResults: uniqueSearch,
 	}
