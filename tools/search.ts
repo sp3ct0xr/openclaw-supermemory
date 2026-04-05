@@ -22,7 +22,10 @@ function formatFreshnessTag(
 	if (!dateStr) return ""
 	const stored = new Date(dateStr)
 	if (Number.isNaN(stored.getTime())) return ""
-	const daysAgo = Math.floor((Date.now() - stored.getTime()) / MS_PER_DAY)
+	const daysAgo = Math.max(
+		0,
+		Math.floor((Date.now() - stored.getTime()) / MS_PER_DAY),
+	)
 	if (daysAgo < 7) return ""
 	if (daysAgo <= 30) return ` ⏱ ${daysAgo}d ago`
 	return ` ⏱ ${daysAgo}d ago — verify before asserting`

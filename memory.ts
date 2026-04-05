@@ -29,13 +29,6 @@ export function detectCategory(text: string): MemoryCategory {
 		)
 	)
 		return "correction"
-	// Confirmations: positive feedback reinforcing validated approaches
-	if (
-		/\b(?:yes[, ]+(?:exactly|that'?s? (?:it|right|correct|perfect|great))|perfect(?:ly)?|exactly (?:right|what i (?:want|need))|keep (?:doing|using) that|that'?s? (?:perfect|great|exactly right))\b/.test(
-			lower,
-		)
-	)
-		return "confirmation"
 	if (/\b(?:prefer|like|love|hate|want|always use|favorite)\b/.test(lower))
 		return "preference"
 	if (/\b(?:decided|will use|going with|let'?s use|we'?ll go with)\b/.test(lower))
@@ -48,6 +41,15 @@ export function detectCategory(text: string): MemoryCategory {
 		)
 	)
 		return "fact"
+	// Confirmations: positive feedback reinforcing validated approaches.
+	// Placed AFTER semantic categories to avoid mis-categorizing
+	// "Perfect, we'll use PostgreSQL" as confirmation instead of decision.
+	if (
+		/\b(?:yes[, ]+(?:exactly|that'?s? (?:it|right|correct|perfect|great))|perfect(?:ly)?|exactly (?:right|what i (?:want|need))|keep (?:doing|using) that|that'?s? (?:perfect|great|exactly right))\b/.test(
+			lower,
+		)
+	)
+		return "confirmation"
 	return "other"
 }
 
