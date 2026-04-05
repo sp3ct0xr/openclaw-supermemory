@@ -809,9 +809,9 @@ export class SupermemoryClient {
 		log.debugRequest("documents.uploadFile", { filePath, containerTag: tag, ...opts })
 		const mimeType = opts?.mimeType ?? "application/octet-stream"
 		const fileName = path.basename(filePath)
-		const fileObj = await toFile(fs.createReadStream(filePath), fileName, { type: mimeType })
+		// const fileObj = await toFile(fs.createReadStream(filePath), fileName, { type: mimeType })
 		const result = await this.client.documents.uploadFile({
-			file: fileObj,
+			file: fs.createReadStream(filePath),
 			...(tag && { containerTags: tag }),
 			...(opts?.fileType && { fileType: opts.fileType }),
 			...(opts?.mimeType && { mimeType: opts.mimeType }),
