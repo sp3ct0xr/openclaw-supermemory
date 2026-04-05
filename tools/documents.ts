@@ -1,17 +1,10 @@
 import fs from "node:fs"
 import { Type } from "@sinclair/typebox"
-import mime from "mime-types"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
+import { deriveFileType, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
-
-/** Derive Supermemory SDK fileType from a MIME string (e.g. "image/png" → "image"). */
-function deriveFileType(mimeStr: string): string | undefined {
-	if (mimeStr === "application/pdf") return "pdf"
-	const category = mimeStr.split("/")[0]
-	return ["image", "video", "audio"].includes(category) ? category : undefined
-}
 
 export function registerDocumentsTool(
 	api: OpenClawPluginApi,
@@ -311,7 +304,7 @@ export function registerDocumentsTool(
 					}
 
 					// Auto-detect fileType and mimeType from extension via mime-types (IANA registry)
-					const detectedMime = mime.lookup(params.filePath) || undefined
+					const detectedMime = lookupMime(params.filePath)
 					const mimeType = params.mimeType ?? detectedMime
 					const fileType = params.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)
 

@@ -198,16 +198,17 @@ export function buildPromptSection(params: {
 	if (hasIngest) {
 		lines.push(
 			"### Ingesting content",
-			"Use supermemory_ingest to add external content to memory. Pass a URL, raw text, or local file path — Supermemory auto-detects the format and extracts memories.",
+			"Use supermemory_ingest to add external content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint.",
 			"",
 			"**Params:** `content` (URL, text, or file path), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
 			"**Supported content:**",
 			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed) — just pass the URL",
-			"- Local files: pass a file path (e.g. `/workspace/docs/README.md`) — text files read as UTF-8, binary files (PDF, images, audio, video) auto-encoded as base64. Restricted to agent workspace.",
-			"- Text: plaintext, markdown, HTML, JSON, CSV",
-			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
+			"- Local text files: pass a file path (e.g. `/workspace/docs/README.md`) — read as UTF-8. Supports .md, .txt, .json, .csv, .html, .xml, .yaml, .ts, .js, .py, .sh, .env, .cfg, etc. Restricted to agent workspace.",
+			"- Local binary files: pass a file path — auto-uploaded via Supermemory's file API with MIME detection. Supports PDF, DOC, DOCX, XLSX, PPTX, images (PNG, JPG, GIF, WebP, SVG), audio (MP3, WAV, M4A, FLAC), video (MP4, WebM, MOV).",
+			"- Raw text: plaintext, markdown, HTML, JSON, CSV, code",
+			"- Raw base64: agent-provided base64-encoded content (data URIs or raw blobs) — sent directly to Supermemory",
 			"",
-			"**Limits:** Text: ~100k chars (plugin sanitize). URLs: up to 10MB (Supermemory fetches server-side). Base64: sent raw up to 50MB (bypasses plugin sanitize).",
+			"**Limits:** Text: ~100k chars (plugin sanitize). URLs: up to 10MB (server-side fetch). Local files: up to 50MB (binary upload). Raw base64: up to 50MB.",
 			"**customId:** Same customId = same document. Re-ingesting with same customId updates instead of duplicating. Use URL slug or your doc ID.",
 			"",
 		)
@@ -226,7 +227,7 @@ export function buildPromptSection(params: {
 			"### Document management",
 			"Use supermemory_documents to inspect, browse, update, upload, or delete ingested documents.",
 			"",
-			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file (PDF, images, audio, video). `action: 'delete'` + `documentId` to remove.",
+			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file (PDF, DOC, DOCX, images, audio, video — MIME auto-detected). `action: 'delete'` + `documentId` to remove.",
 			"",
 		)
 	}
