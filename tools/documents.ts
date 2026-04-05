@@ -323,6 +323,7 @@ export function registerDocumentsTool(
 						{
 							...(fileType && { fileType }),
 							...(mimeType && { mimeType }),
+							...(params.containerTag && { containerTag: params.containerTag }),
 						},
 					)
 
