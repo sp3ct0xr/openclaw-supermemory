@@ -1,9 +1,25 @@
 import fs from "node:fs"
+import path from "node:path"
 import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+
+/** Map file extensions to { fileType, mimeType } for the Supermemory upload API. */
+const MIME_MAP: Record<string, { fileType: string; mimeType: string }> = {
+	".png":  { fileType: "image", mimeType: "image/png" },
+	".jpg":  { fileType: "image", mimeType: "image/jpeg" },
+	".jpeg": { fileType: "image", mimeType: "image/jpeg" },
+	".gif":  { fileType: "image", mimeType: "image/gif" },
+	".webp": { fileType: "image", mimeType: "image/webp" },
+	".pdf":  { fileType: "pdf",   mimeType: "application/pdf" },
+	".mp4":  { fileType: "video", mimeType: "video/mp4" },
+	".webm": { fileType: "video", mimeType: "video/webm" },
+	".mp3":  { fileType: "audio", mimeType: "audio/mpeg" },
+	".wav":  { fileType: "audio", mimeType: "audio/wav" },
+	".ogg":  { fileType: "audio", mimeType: "audio/ogg" },
+}
 
 export function registerDocumentsTool(
 	api: OpenClawPluginApi,
@@ -302,14 +318,20 @@ export function registerDocumentsTool(
 						}
 					}
 
+					// Auto-detect fileType and mimeType from extension when not explicitly provided
+					const ext = path.extname(params.filePath).toLowerCase()
+					const detected = MIME_MAP[ext]
+					const fileType = params.fileType ?? detected?.fileType
+					const mimeType = params.mimeType ?? detected?.mimeType
+
 					log.debug(
-						`documents tool: upload filePath=${params.filePath} fileType=${params.fileType ?? "auto"} mimeType=${params.mimeType ?? "auto"}`,
+						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected ext=${ext})`,
 					)
 					const uploadResult = await client.uploadFile(
 						params.filePath,
 						{
-							...(params.fileType && { fileType: params.fileType }),
-							...(params.mimeType && { mimeType: params.mimeType }),
+							...(fileType && { fileType }),
+							...(mimeType && { mimeType }),
 						},
 					)
 
