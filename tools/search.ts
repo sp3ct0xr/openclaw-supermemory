@@ -124,6 +124,8 @@ export function registerSearchTool(
 							rewriteQuery: true,
 							includeSummary: true,
 							...(filters && { filters }),
+							// TODO: SDK search.documents() only has deprecated containerTags.
+							// Migrate when SDK adds singular containerTag to SearchDocumentsParams.
 							...(params.containerTag && {
 								containerTags: [params.containerTag],
 							}),
