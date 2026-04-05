@@ -350,6 +350,7 @@ export class SupermemoryClient {
 		const response = await this.client.search.memories({
 			q: query,
 			limit,
+			searchMode: "hybrid",
 			rerank: opts?.rerank ?? true,
 			...(opts?.rewriteQuery !== undefined && { rewriteQuery: opts.rewriteQuery }),
 			...(opts?.containerTag && { containerTag: opts.containerTag }),
