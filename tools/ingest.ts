@@ -1,33 +1,56 @@
+import fs from "node:fs"
+import path from "node:path"
 import { Type } from "@sinclair/typebox"
-import * as fs from "node:fs"
-import * as path from "node:path"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
+import { deriveFileType, isTextMime, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
 
 // ---------- local-file helpers ----------
 
-const TEXT_EXTENSIONS = new Set([
-	".md", ".txt", ".json", ".csv", ".html", ".xml",
-	".yaml", ".yml", ".ts", ".js", ".py", ".sh",
-	".jsx", ".tsx", ".css", ".scss", ".sql", ".toml",
-	".ini", ".cfg", ".conf", ".log", ".env", ".rst",
+/** Fallback set for dotfiles/config files that mime-types returns false for. */
+const TEXT_FALLBACK_EXTENSIONS = new Set([
+	".env", ".cfg", ".conf", ".log", ".ini", ".rst",
+	".toml", ".editorconfig", ".gitignore", ".dockerignore",
 ])
 
-const BINARY_EXTENSIONS: Record<string, string> = {
-	".pdf": "application/pdf",
-	".png": "image/png",
-	".jpg": "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif": "image/gif",
-	".webp": "image/webp",
-	".mp4": "video/mp4",
-	".mp3": "audio/mpeg",
-	".wav": "audio/wav",
-	".zip": "application/zip",
-	".tar": "application/x-tar",
-	".gz": "application/gzip",
+/**
+ * Classify a file as text or binary using mime-types, fallback sets, and null-byte peek.
+ * Returns { isText: true } or { isText: false, detectedMime: string }.
+ */
+function classifyFile(filePath: string): { isText: true } | { isText: false; detectedMime: string } {
+	const ext = path.extname(filePath).toLowerCase()
+	const detected = lookupMime(filePath)
+
+	if (detected) {
+		if (isTextMime(detected)) return { isText: true }
+		return { isText: false, detectedMime: detected }
+	}
+
+	// mime-types returned false — use fallback.
+	// path.extname(".env") returns "" for dotfiles without a second dot,
+	// so also check the full basename for dotfile names.
+	const basename = path.basename(filePath).toLowerCase()
+	if (TEXT_FALLBACK_EXTENSIONS.has(ext) || TEXT_FALLBACK_EXTENSIONS.has(basename)) return { isText: true }
+
+	// Unknown extension: peek first 8KB for null bytes
+	let fd: number | undefined
+	try {
+		fd = fs.openSync(filePath, "r")
+		const buf = Buffer.alloc(8192)
+		const bytesRead = fs.readSync(fd, buf, 0, 8192, 0)
+		for (let i = 0; i < bytesRead; i++) {
+			if (buf[i] === 0) return { isText: false, detectedMime: "application/octet-stream" }
+		}
+		return { isText: true }
+	} catch {
+		// Can't safely inspect file contents; treat as binary so callers
+		// don't retry the same failing read via the text path.
+		return { isText: false, detectedMime: "application/octet-stream" }
+	} finally {
+		if (fd !== undefined) fs.closeSync(fd)
+	}
 }
 
 /**
@@ -129,19 +152,52 @@ export function registerIngestTool(
 							// fall through to treat as plain text
 						} else {
 							localFilePath = resolved
-							const ext = path.extname(resolved).toLowerCase()
-							const mime = BINARY_EXTENSIONS[ext]
+							const classification = classifyFile(resolved)
 
-							if (mime) {
-								// Binary file → base64-encode
-								const buf = fs.readFileSync(resolved)
-								content = `data:${mime};base64,${buf.toString("base64")}`
-								log.debug(`ingest: read binary file ${resolved} (${buf.length} bytes, ${mime})`)
-							} else {
-								// Text file (known text ext OR unknown ext → default to text)
-								content = fs.readFileSync(resolved, "utf-8")
-								log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
+							if (!classification.isText) {
+								// Binary file → route through uploadFile() (proper SM binary endpoint)
+								const detectedMime = classification.detectedMime
+								const fileType = deriveFileType(detectedMime)
+								const fileSize = fs.statSync(resolved).size
+
+								log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${detectedMime}, fileType=${fileType ?? "auto"})`)
+
+								const uploadResult = await client.uploadFile(resolved, {
+									...(fileType && { fileType }),
+									...(detectedMime && { mimeType: detectedMime }),
+									metadata: {
+										source: "openclaw_ingest",
+										documentDate: new Date().toISOString(),
+										sourceFile: resolved,
+										// uploadFile API has no customId param; encode in metadata for traceability
+										...(params.customId && { customId: params.customId }),
+										...params.metadata,
+									},
+									containerTag: tag,
+								})
+
+								const sizeLabel = fileSize > 1024 ? `${(fileSize / 1024).toFixed(0)}KB` : `${fileSize} bytes`
+
+								return {
+									content: [
+										{
+											type: "text" as const,
+											text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
+										},
+									],
+									details: {
+										id: uploadResult.id,
+										status: uploadResult.status,
+										localFile: resolved,
+										detectedMime,
+										fileType,
+									},
+								}
 							}
+
+							// Text file → read as UTF-8
+							content = fs.readFileSync(resolved, "utf-8")
+							log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
 						}
 					} else {
 						log.debug(`ingest: path-like content but file not found: ${resolved}`)
@@ -172,8 +228,9 @@ export function registerIngestTool(
 				let result: { id: string }
 
 				if (isBase64) {
-					// Base64 content: use addRawContent() to bypass sanitizeContent
-					// which would truncate at 100k chars and corrupt the payload
+					// Agent-provided base64: use addRawContent() to bypass sanitizeContent
+					// which would truncate at 100k chars and corrupt the payload.
+					// NOTE: For local binary files we use uploadFile() above instead.
 					result = await client.addRawContent({
 						content,
 						containerTag: tag,
@@ -204,7 +261,7 @@ export function registerIngestTool(
 				}
 
 				const preview = localFilePath
-					? `📁 ${path.basename(localFilePath)} (${isBase64 ? "binary" : "text"}, ${content.length > 1024 ? `${(content.length / 1024).toFixed(0)}KB` : `${content.length} chars`})`
+					? `📁 ${path.basename(localFilePath)} (text, ${content.length > 1024 ? `${(content.length / 1024).toFixed(0)}KB` : `${content.length} chars`})`
 					: isUrl
 						? content
 						: isBase64
