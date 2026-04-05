@@ -37,25 +37,29 @@ function deduplicateMemories(
 	dynamic: string[]
 	searchResults: ProfileSearchResult[]
 } {
-	// Pass 1: exact-match dedup via Set
+	// Pass 1: exact-match dedup via Set (case-insensitive)
 	const seen = new Set<string>()
+	const normalizeKey = (s: string) => s.trim().toLowerCase()
 
 	const uniqueStatic = staticFacts.filter((m) => {
-		if (seen.has(m)) return false
-		seen.add(m)
+		const key = normalizeKey(m)
+		if (seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
 	const uniqueDynamic = dynamicFacts.filter((m) => {
-		if (seen.has(m)) return false
-		seen.add(m)
+		const key = normalizeKey(m)
+		if (seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
 	const uniqueSearch = searchResults.filter((r) => {
 		const memory = r.memory ?? ""
-		if (!memory || seen.has(memory)) return false
-		seen.add(memory)
+		const key = normalizeKey(memory)
+		if (!memory || seen.has(key)) return false
+		seen.add(key)
 		return true
 	})
 
@@ -65,10 +69,15 @@ function deduplicateMemories(
 	// SM profile extraction). Stricter threshold to avoid dropping distinct memories.
 	const fuzzyDeduped: string[] = []
 	for (const fact of uniqueStatic) {
-		const isDupe = fuzzyDeduped.some(
+		const dupeIdx = fuzzyDeduped.findIndex(
 			(existing) => textSimilarity(fact, existing) >= RECALL_DEDUP_SIMILARITY_THRESHOLD,
 		)
-		if (!isDupe) fuzzyDeduped.push(fact)
+		if (dupeIdx === -1) {
+			fuzzyDeduped.push(fact)
+		} else if (fact.length > fuzzyDeduped[dupeIdx].length) {
+			// Keep the longer/more informative variant
+			fuzzyDeduped[dupeIdx] = fact
+		}
 	}
 
 	return {

@@ -3,7 +3,6 @@
  * All functions return **similarity** (1 = identical, 0 = completely different),
  * inverting wink-distance's convention (which returns distance).
  */
-// @ts-expect-error — wink-distance has no TypeScript declarations
 import wd from "wink-distance"
 
 // ── Thresholds (centralised so callers don't hardcode magic numbers) ──
@@ -39,7 +38,10 @@ export function toBow(text: string): Record<string, number> {
  */
 export function textSimilarity(a: string, b: string): number {
 	if (a === b) return 1
-	return 1 - (wd.string.jaroWinkler(a.toLowerCase(), b.toLowerCase()) as number)
+	const normA = normalise(a)
+	const normB = normalise(b)
+	if (normA === normB) return 1
+	return 1 - wd.string.jaroWinkler(normA, normB)
 }
 
 /**
@@ -50,5 +52,5 @@ export function textSimilarity(a: string, b: string): number {
 export function bowSimilarity(a: string, b: string): number {
 	const bowA = toBow(a)
 	const bowB = toBow(b)
-	return 1 - (wd.bow.cosine(bowA, bowB) as number)
+	return 1 - wd.bow.cosine(bowA, bowB)
 }
