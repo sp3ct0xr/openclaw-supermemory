@@ -5,6 +5,7 @@ import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { deriveFileType, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
+import { isAllowedPath } from "../path-guard.ts"
 
 export function registerDocumentsTool(
 	api: OpenClawPluginApi,
@@ -303,7 +304,19 @@ export function registerDocumentsTool(
 						}
 					}
 
-					// Auto-detect fileType and mimeType from extension via mime-types (IANA registry)
+					// SECURITY: validate path before reading
+					if (!isAllowedPath(params.filePath)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Access denied: file is outside the allowed workspace. Only files in the workspace or /tmp can be uploaded.`,
+								},
+							],
+						}
+					}
+
+					// Auto-detect fileType and mimeType
 					const detectedMime = lookupMime(params.filePath)
 					const mimeType = params.mimeType ?? detectedMime
 					const fileType = params.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)

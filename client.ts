@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import Supermemory, { toFile } from "supermemory"
+import { isAllowedPath } from "./path-guard.ts"
 import {
 	sanitizeContent,
 	validateApiKeyFormat,
@@ -805,6 +806,10 @@ export class SupermemoryClient {
 		metadata?: Record<string, string | number | boolean>
 		containerTag?: string
 	}): Promise<{ id: string; status: string }> {
+		// Defense in depth: validate path even if caller already checked
+		if (!isAllowedPath(filePath)) {
+			throw new Error(`uploadFile blocked: ${filePath} is outside allowed directories`)
+		}
 		const tag = opts?.containerTag ?? this.containerTag
 		log.debugRequest("documents.uploadFile", { filePath, containerTag: tag, ...opts })
 		const mimeType = opts?.mimeType ?? "application/octet-stream"
