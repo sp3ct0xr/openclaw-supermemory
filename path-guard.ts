@@ -18,6 +18,7 @@ export function initPathGuard(api: OpenClawPluginApi): void {
 	// Resolve workspace via OpenClaw SDK
 	try {
 		// SDK signature: api.runtime.agent.resolveAgentWorkspaceDir(cfg)
+		// TODO: remove `as any` casts when OpenClaw plugin SDK types expose `config` and `runtime`
 		const cfg = (api as any).config ?? api.pluginConfig
 		const runtime = (api as any).runtime
 		const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg)
@@ -69,6 +70,9 @@ export function isAllowedPath(filePath: string): boolean {
 		return false
 	}
 	try {
+		// NOTE: realpathSync throws ENOENT for non-existent files → catch returns false
+		// → caller sees "Access denied" instead of "File not found". This is intentional:
+		// prevents existence probing of out-of-boundary paths.
 		const resolved = fs.realpathSync(filePath)
 		for (const dir of allowedDirs) {
 			if (resolved === dir) return true
