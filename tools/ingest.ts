@@ -4,8 +4,22 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { deriveFileType, isTextMime, lookupMime } from "../mime-utils.ts"
+import { isTextMime, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
+import { isAllowedPath } from "../path-guard.ts"
+
+/** Build standard ingest metadata with source, timestamp, and caller overrides. */
+function buildIngestMetadata(
+	overrides?: Record<string, string | number | boolean>,
+	extra?: Record<string, string | number | boolean>,
+): Record<string, string | number | boolean> {
+	return {
+		source: "openclaw_ingest",
+		documentDate: new Date().toISOString(),
+		...extra,
+		...overrides,
+	}
+}
 
 // ---------- local-file helpers ----------
 
@@ -79,63 +93,6 @@ export function registerIngestTool(
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
 ): void {
-	// Resolve workspace boundary at registration time for file path security.
-	// Only files inside the agent's workspace can be read from disk.
-	// Uses SDK's api.runtime.agent.resolveAgentWorkspaceDir() when available.
-	let workspaceDir: string | undefined
-	try {
-		// SDK signature: api.runtime.agent.resolveAgentWorkspaceDir(cfg)
-		// Takes only the config object — no agentId param.
-		const cfg_ = (api as any).config ?? api.pluginConfig
-		const runtime = (api as any).runtime
-		const raw = runtime?.agent?.resolveAgentWorkspaceDir?.(cfg_)
-		workspaceDir = raw ? fs.realpathSync(raw) : undefined
-	} catch (err) {
-		log.warn(`supermemory_ingest: workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
-	}
-
-	// Fallback: if SDK resolution failed, try known OpenClaw workspace paths
-	if (!workspaceDir) {
-		const fallbackPaths = [
-			"/data/.openclaw/workspace",
-			process.env.OPENCLAW_WORKSPACE_DIR,
-			process.cwd(),
-		].filter(Boolean) as string[]
-		for (const candidate of fallbackPaths) {
-			try {
-				if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-					workspaceDir = fs.realpathSync(candidate)
-					log.info(`supermemory_ingest: workspaceDir resolved via fallback: ${workspaceDir}`)
-					break
-				}
-			} catch { /* skip invalid candidate */ }
-		}
-	}
-	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — all file reads blocked)"}`)
-
-	/** Directories allowed for file reads (workspace + /tmp for downloaded files). */
-	const allowedDirs = [workspaceDir, "/tmp"].filter(Boolean) as string[]
-
-	function isInsideWorkspace(filePath: string): boolean {
-		if (allowedDirs.length === 0) {
-			log.warn("supermemory_ingest: no workspace boundary resolved — denying file read")
-			return false
-		}
-		try {
-			const resolved = fs.realpathSync(filePath)
-			for (const dir of allowedDirs) {
-				if (resolved === dir) return true
-				const rel = path.relative(dir, resolved)
-				if (!rel.startsWith("..") && !path.isAbsolute(rel)) return true
-			}
-			log.warn(`supermemory_ingest: path rejected — resolved=${resolved} allowedDirs=[${allowedDirs.join(", ")}]`)
-			return false
-		} catch (err) {
-			log.warn(`supermemory_ingest: realpathSync failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
-			return false
-		}
-	}
-
 	api.registerTool(
 		{
 			name: "supermemory_ingest",
@@ -174,68 +131,63 @@ export function registerIngestTool(
 					metadata?: Record<string, string | number | boolean>
 				},
 			) {
-				const tag = params.containerTag ?? undefined
+				const tag = params.containerTag
 				let content = params.content
 				let localFilePath: string | undefined
 
 				// --- Local file auto-read ---
 				if (looksLikeLocalPath(content)) {
 					const resolved = resolvePath(content)
-					if (fs.existsSync(resolved)) {
-						if (!isInsideWorkspace(resolved)) {
-							log.warn(`supermemory_ingest: path outside workspace boundary${workspaceDir ? ` (${workspaceDir})` : ""}, skipping file read: ${resolved}`)
-							// fall through to treat as plain text
-						} else {
-							localFilePath = resolved
-							const classification = classifyFile(resolved)
-
-							if (!classification.isText) {
-								// Binary file → route through uploadFile() (proper SM binary endpoint)
-								const detectedMime = classification.detectedMime
-								const fileType = deriveFileType(detectedMime)
-								const fileSize = fs.statSync(resolved).size
-
-								log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${detectedMime}, fileType=${fileType ?? "auto"})`)
-
-								const uploadResult = await client.uploadFile(resolved, {
-									...(fileType && { fileType }),
-									...(detectedMime && { mimeType: detectedMime }),
-									metadata: {
-										source: "openclaw_ingest",
-										documentDate: new Date().toISOString(),
-										sourceFile: resolved,
-										// uploadFile API has no customId param; encode in metadata for traceability
-										...(params.customId && { customId: params.customId }),
-										...params.metadata,
-									},
-									containerTag: tag,
-								})
-
-								const sizeLabel = fileSize > 1024 ? `${(fileSize / 1024).toFixed(0)}KB` : `${fileSize} bytes`
-
-								return {
-									content: [
-										{
-											type: "text" as const,
-											text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
-										},
-									],
-									details: {
-										id: uploadResult.id,
-										status: uploadResult.status,
-										localFile: resolved,
-										detectedMime,
-										fileType,
-									},
-								}
-							}
-
-							// Text file → read as UTF-8
-							content = fs.readFileSync(resolved, "utf-8")
-							log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
+					// SECURITY: check boundary BEFORE existsSync to prevent existence probing
+					if (!isAllowedPath(resolved)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Access denied: file is outside the allowed workspace. Only files in the workspace or /tmp can be ingested.`,
+								},
+							],
 						}
+					}
+					if (fs.existsSync(resolved)) {
+						localFilePath = resolved
+						const classification = classifyFile(resolved)
+
+						if (!classification.isText) {
+							// Binary file → route through uploadFile() (client auto-detects MIME)
+							const fileSize = fs.statSync(resolved).size
+							log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${classification.detectedMime})`)
+
+							const uploadResult = await client.uploadFile(resolved, {
+								metadata: buildIngestMetadata(params.metadata, {
+									sourceFile: resolved,
+									...(params.customId && { customId: params.customId }),
+								}),
+								containerTag: tag,
+							})
+
+							const sizeLabel = fileSize > 1024 ? `${(fileSize / 1024).toFixed(0)}KB` : `${fileSize} bytes`
+
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${classification.detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
+									},
+								],
+								details: {
+									id: uploadResult.id,
+									status: uploadResult.status,
+									localFile: resolved,
+								},
+							}
+						}
+
+						// Text file → read as UTF-8
+						content = fs.readFileSync(resolved, "utf-8")
+						log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
 					} else {
-						log.debug(`ingest: path-like content but file not found: ${resolved}`)
+						log.debug(`ingest: path-like content but file not found`)
 					}
 				}
 
@@ -276,24 +228,18 @@ export function registerIngestTool(
 						containerTag: tag,
 						customId: params.customId,
 						entityContext: cfg.entityContext,
-						metadata: {
-							source: "openclaw_ingest",
-							documentDate: new Date().toISOString(),
+						metadata: buildIngestMetadata(params.metadata, {
 							...(localFilePath && { sourceFile: localFilePath }),
-							...params.metadata,
-						},
+						}),
 					})
 				} else {
 					// URL or text: use addMemory() which sanitizes content
 					result = await client.addMemory(
 						content,
-						{
-							source: "openclaw_ingest",
-							documentDate: new Date().toISOString(),
+						buildIngestMetadata(params.metadata, {
 							...(isUrl && { contentUrl: content }),
 							...(localFilePath && { sourceFile: localFilePath }),
-							...params.metadata,
-						},
+						}),
 						params.customId,
 						tag,
 						cfg.entityContext,

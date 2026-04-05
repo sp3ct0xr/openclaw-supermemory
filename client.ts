@@ -1,6 +1,8 @@
 import fs from "node:fs"
 import path from "node:path"
 import Supermemory, { toFile } from "supermemory"
+import { isAllowedPath } from "./path-guard.ts"
+import { deriveFileType, lookupMime } from "./mime-utils.ts"
 import {
 	sanitizeContent,
 	validateApiKeyFormat,
@@ -798,23 +800,33 @@ export class SupermemoryClient {
 		return { id: result.id }
 	}
 
-	/** Upload a binary file for processing. */
+	/** Upload a binary file for processing.
+	 *  Auto-detects MIME type and SDK fileType from extension when not provided. */
 	async uploadFile(filePath: string, opts?: {
 		fileType?: string
 		mimeType?: string
 		metadata?: Record<string, string | number | boolean>
 		containerTag?: string
 	}): Promise<{ id: string; status: string }> {
+		// Defense in depth: validate path even if caller already checked
+		if (!isAllowedPath(filePath)) {
+			throw new Error(`uploadFile blocked: ${path.basename(filePath)} is outside allowed directories`)
+		}
 		const tag = opts?.containerTag ?? this.containerTag
-		log.debugRequest("documents.uploadFile", { filePath, containerTag: tag, ...opts })
-		const mimeType = opts?.mimeType ?? "application/octet-stream"
+
+		// Auto-detect MIME and fileType from extension when not explicitly provided
+		const detectedMime = lookupMime(filePath)
+		const mimeType = opts?.mimeType ?? detectedMime ?? "application/octet-stream"
+		const fileType = opts?.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)
+
+		log.debugRequest("documents.uploadFile", { filePath, containerTag: tag, mimeType, fileType, detected: detectedMime })
 		const fileName = path.basename(filePath)
 		const fileObj = await toFile(fs.createReadStream(filePath), fileName, { type: mimeType })
 		const result = await this.client.documents.uploadFile({
 			file: fileObj,
 			...(tag && { containerTags: tag }),
-			...(opts?.fileType && { fileType: opts.fileType }),
-			...(opts?.mimeType && { mimeType: opts.mimeType }),
+			...(fileType && { fileType }),
+			...(mimeType && { mimeType }),
 			...(opts?.metadata && { metadata: JSON.stringify(opts.metadata) }),
 		})
 		log.debugResponse("documents.uploadFile", result)

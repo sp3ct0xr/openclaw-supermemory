@@ -3,8 +3,8 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { deriveFileType, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
+import { isAllowedPath } from "../path-guard.ts"
 
 export function registerDocumentsTool(
 	api: OpenClawPluginApi,
@@ -292,31 +292,37 @@ export function registerDocumentsTool(
 						}
 					}
 
-					if (!fs.existsSync(params.filePath)) {
+					// SECURITY: check boundary BEFORE existsSync to prevent existence probing
+					if (!isAllowedPath(params.filePath)) {
 						return {
 							content: [
 								{
 									type: "text" as const,
-									text: `File not found: ${params.filePath}`,
+									text: `Access denied: file is outside the allowed workspace. Only files in the workspace or /tmp can be uploaded.`,
 								},
 							],
 						}
 					}
 
-					// Auto-detect fileType and mimeType from extension via mime-types (IANA registry)
-					const detectedMime = lookupMime(params.filePath)
-					const mimeType = params.mimeType ?? detectedMime
-					const fileType = params.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)
+					if (!fs.existsSync(params.filePath)) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `File not found.`,
+								},
+							],
+						}
+					}
 
-					log.debug(
-						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected=${detectedMime ?? "none"})`,
-					)
+					// Client auto-detects MIME/fileType from extension; only pass explicit overrides
+					log.debug(`documents tool: upload filePath=${params.filePath}`)
 
 					const uploadResult = await client.uploadFile(
 						params.filePath,
 						{
-							...(fileType && { fileType }),
-							...(mimeType && { mimeType }),
+							...(params.fileType && { fileType: params.fileType }),
+							...(params.mimeType && { mimeType: params.mimeType }),
 							...(params.containerTag && { containerTag: params.containerTag }),
 						},
 					)

@@ -13,6 +13,7 @@ import {
 } from "./hooks/capture.ts"
 import { buildRecallHandler } from "./hooks/recall.ts"
 import { initLogger } from "./logger.ts"
+import { initPathGuard } from "./path-guard.ts"
 import { buildMemoryRuntime, buildPromptSection } from "./runtime.ts"
 import { registerForgetTool } from "./tools/forget.ts"
 import { registerProfileTool } from "./tools/profile.ts"
@@ -44,6 +45,7 @@ export default {
 		const cfg = parseConfig(api.pluginConfig)
 
 		initLogger(api.logger, cfg.debug)
+		initPathGuard(api)
 
 		registerCliSetup(api)
 
