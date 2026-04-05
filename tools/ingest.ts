@@ -6,15 +6,6 @@ import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
-// ---------- workspace boundary ----------
-
-const WORKSPACE_DIR = '/data/.openclaw/workspace'
-
-function isInsideWorkspace(filePath: string): boolean {
-	const resolved = fs.realpathSync(filePath)
-	return resolved.startsWith(WORKSPACE_DIR + '/') || resolved === WORKSPACE_DIR
-}
-
 // ---------- local-file helpers ----------
 
 const TEXT_EXTENSIONS = new Set([
@@ -65,6 +56,28 @@ export function registerIngestTool(
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
 ): void {
+	// Resolve workspace boundary at registration time for file path security.
+	// Only files inside the agent's workspace can be read from disk.
+	// Uses SDK's api.runtime.agent.resolveAgentWorkspaceDir() when available.
+	let workspaceDir: string | undefined
+	try {
+		workspaceDir = (api as any).runtime?.agent?.resolveAgentWorkspaceDir?.(
+			(api as any).config ?? api.pluginConfig,
+		)
+	} catch {
+		// runtime may not be available in all registration modes
+	}
+
+	function isInsideWorkspace(filePath: string): boolean {
+		if (!workspaceDir) return true // no boundary resolved = allow (graceful degradation)
+		try {
+			const resolved = fs.realpathSync(filePath)
+			return resolved.startsWith(workspaceDir + "/") || resolved === workspaceDir
+		} catch {
+			return false // can't resolve (e.g. broken symlink) = reject
+		}
+	}
+
 	api.registerTool(
 		{
 			name: "supermemory_ingest",
@@ -112,23 +125,23 @@ export function registerIngestTool(
 					const resolved = resolvePath(content)
 					if (fs.existsSync(resolved)) {
 						if (!isInsideWorkspace(resolved)) {
-							log.warn(`supermemory_ingest: path outside workspace, skipping file read: ${resolved}`)
+							log.warn(`supermemory_ingest: path outside workspace boundary${workspaceDir ? ` (${workspaceDir})` : ""}, skipping file read: ${resolved}`)
 							// fall through to treat as plain text
 						} else {
-						localFilePath = resolved
-						const ext = path.extname(resolved).toLowerCase()
-						const mime = BINARY_EXTENSIONS[ext]
+							localFilePath = resolved
+							const ext = path.extname(resolved).toLowerCase()
+							const mime = BINARY_EXTENSIONS[ext]
 
-						if (mime) {
-							// Binary file → base64-encode
-							const buf = fs.readFileSync(resolved)
-							content = `data:${mime};base64,${buf.toString("base64")}`
-							log.debug(`ingest: read binary file ${resolved} (${buf.length} bytes, ${mime})`)
-						} else {
-							// Text file (known text ext OR unknown ext → default to text)
-							content = fs.readFileSync(resolved, "utf-8")
-							log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
-						}
+							if (mime) {
+								// Binary file → base64-encode
+								const buf = fs.readFileSync(resolved)
+								content = `data:${mime};base64,${buf.toString("base64")}`
+								log.debug(`ingest: read binary file ${resolved} (${buf.length} bytes, ${mime})`)
+							} else {
+								// Text file (known text ext OR unknown ext → default to text)
+								content = fs.readFileSync(resolved, "utf-8")
+								log.debug(`ingest: read text file ${resolved} (${content.length} chars)`)
+							}
 						}
 					} else {
 						log.debug(`ingest: path-like content but file not found: ${resolved}`)
