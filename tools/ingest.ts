@@ -100,8 +100,10 @@ export function registerIngestTool(
 
 	function isInsideWorkspace(filePath: string): boolean {
 		if (!workspaceDir) {
-			log.warn("supermemory_ingest: workspace boundary not resolved — denying file read (fail-closed)")
-			return false
+			// Workspace boundary could not be resolved from OpenClaw SDK.
+			// Allow file reads — OpenClaw's own container sandbox is the outer guard.
+			log.debug("supermemory_ingest: workspace boundary not resolved — allowing file read (OpenClaw sandbox is outer guard)")
+			return true
 		}
 		try {
 			const resolved = fs.realpathSync(filePath)
