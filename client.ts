@@ -809,10 +809,13 @@ export class SupermemoryClient {
 		fileType?: string
 		mimeType?: string
 		metadata?: Record<string, string | number | boolean>
+		containerTag?: string
 	}): Promise<{ id: string; status: string }> {
-		log.debugRequest("documents.uploadFile", { filePath, ...opts })
+		const tag = opts?.containerTag ?? this.containerTag
+		log.debugRequest("documents.uploadFile", { filePath, containerTag: tag, ...opts })
 		const result = await this.client.documents.uploadFile({
 			file: fs.createReadStream(filePath),
+			...(tag && { containerTags: tag }),
 			...(opts?.fileType && { fileType: opts.fileType }),
 			...(opts?.mimeType && { mimeType: opts.mimeType }),
 			...(opts?.metadata && { metadata: JSON.stringify(opts.metadata) }),
