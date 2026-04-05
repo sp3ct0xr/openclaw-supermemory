@@ -196,6 +196,7 @@ export function registerSearchTool(
 
 				const searchOpts = {
 					...(params.rerank !== undefined && { rerank: params.rerank }),
+					searchMode: "hybrid" as const,
 					...(filters && { filters }),
 				}
 
