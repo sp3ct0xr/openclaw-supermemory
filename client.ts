@@ -58,15 +58,14 @@ export type ProcessingDocument = {
 }
 
 export type DeepSearchResult = {
-	documentId: string
-	title: string | null
+	id: string
+	type: "memory" | "chunk"
+	content: string
 	score: number
-	chunks: { content: string; score: number; isRelevant: boolean }[]
-	summary?: string | null
-	content?: string | null
-	metadata?: Record<string, unknown> | null
-	createdAt: string
+	metadata: Record<string, unknown> | null
 	updatedAt: string
+	version?: number | null
+	context?: { parents?: unknown[]; children?: unknown[] }
 }
 
 export type ProfileSearchResult = {
@@ -328,7 +327,7 @@ export class SupermemoryClient {
 		return results
 	}
 
-	/** Deep search via search.documents() — returns chunk-level results with reranking. */
+	/** Deep search via search.memories() with hybrid mode — returns both memories and document chunks. */
 	async deepSearch(
 		query: string,
 		opts?: {
@@ -336,55 +335,43 @@ export class SupermemoryClient {
 			rerank?: boolean
 			rewriteQuery?: boolean
 			filters?: Record<string, unknown>
-			includeFullDocs?: boolean
-			includeSummary?: boolean
-			chunkThreshold?: number
-			/** Search mode: 'hybrid' includes both memories and document chunks. */
-			searchMode?: "memories" | "hybrid" | "documents"
-			/** @deprecated SDK v4.21.1 search.documents() only supports containerTags (array).
-			 *  Will migrate to containerTag (singular) when SDK adds it to SearchDocumentsParams. */
-			containerTags?: string[]
+			containerTag?: string
 		},
 	): Promise<DeepSearchResult[]> {
 		const limit = opts?.limit ?? 5
-		log.debugRequest("search.documents", {
+		log.debugRequest("search.memories(hybrid)", {
 			query,
 			limit,
 			rerank: opts?.rerank,
 			rewriteQuery: opts?.rewriteQuery,
-			containerTags: opts?.containerTags,
+			containerTag: opts?.containerTag,
 		})
 
-		const response = await this.client.search.documents({
+		const response = await this.client.search.memories({
 			q: query,
 			limit,
 			rerank: opts?.rerank ?? true,
 			rewriteQuery: opts?.rewriteQuery ?? true,
-			...(opts?.containerTags && { containerTags: opts.containerTags }),
+			searchMode: "hybrid",
+			...(opts?.containerTag && { containerTag: opts.containerTag }),
 			...(opts?.filters && { filters: opts.filters as any }),
-			...(opts?.includeFullDocs !== undefined && { includeFullDocs: opts.includeFullDocs }),
-			...(opts?.includeSummary !== undefined && { includeSummary: opts.includeSummary }),
-			...(opts?.chunkThreshold !== undefined && { chunkThreshold: opts.chunkThreshold }),
-			...(opts?.searchMode && { searchMode: opts.searchMode }),
-		} as any)
+		})
 
 		const results: DeepSearchResult[] = (response.results ?? []).map((r) => ({
-			documentId: r.documentId,
-			title: r.title,
-			score: r.score,
-			chunks: r.chunks.map((c) => ({
-				content: c.content,
-				score: c.score,
-				isRelevant: c.isRelevant,
-			})),
-			summary: r.summary,
-			content: r.content,
-			metadata: r.metadata,
-			createdAt: r.createdAt,
+			id: r.id,
+			type: r.memory ? "memory" as const : "chunk" as const,
+			content: r.memory ?? r.chunk ?? "",
+			score: r.similarity,
+			metadata: r.metadata ?? null,
 			updatedAt: r.updatedAt,
+			version: r.version,
+			context: r.context ? {
+				parents: r.context.parents,
+				children: r.context.children,
+			} : undefined,
 		}))
 
-		log.debugResponse("search.documents", { count: results.length })
+		log.debugResponse("search.memories(hybrid)", { count: results.length })
 		return results
 	}
 
