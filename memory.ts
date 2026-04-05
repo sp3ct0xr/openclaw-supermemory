@@ -72,7 +72,8 @@ RULES:
 - Corrections REPLACE old facts. Confirmations reinforce validated approaches.
 - If a new fact updates or extends a previously stated fact, note the relationship (e.g. "User now works at Y" updates "User worked at X").
 - Include temporal context when relevant: "As of [date], user is working on X".
-- When in doubt, do NOT create a memory. Precision > recall.`
+- When in doubt, do NOT create a memory. Precision > recall.
+- When the user discusses a document, extract its title, type, and key topic as an entity memory (e.g. "User shared 'Q1 Report' — quarterly revenue summary").`
 
 export function clampEntityContext(ctx: string): string {
 	if (ctx.length <= MAX_ENTITY_CONTEXT_LENGTH) return ctx
