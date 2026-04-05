@@ -67,8 +67,10 @@ CATEGORIES: preference | fact | decision | entity | correction | confirmation
 
 RULES:
 - ONE fact per memory. "Prefers X and uses Y" = two separate memories, not one.
+- Resolve ambiguous references. "He switched to tabs" → "User switched to tabs". Never store pronouns or "this/that" without resolving the referent.
 - Assistant output is CONTEXT ONLY — never attribute assistant actions to the user.
 - Corrections REPLACE old facts. Confirmations reinforce validated approaches.
+- If a new fact updates or extends a previously stated fact, note the relationship (e.g. "User now works at Y" updates "User worked at X").
 - Include temporal context when relevant: "As of [date], user is working on X".
 - When in doubt, do NOT create a memory. Precision > recall.`
 
