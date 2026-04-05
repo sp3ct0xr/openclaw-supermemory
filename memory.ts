@@ -66,7 +66,7 @@ DO NOT REMEMBER: one-time tasks, assistant actions, implementation details, tran
 CATEGORIES: preference | fact | decision | entity | correction | confirmation
 
 RULES:
-- ONE fact per memory. "Prefers dark mode and uses PostgreSQL" = two memories, not one.
+- ONE fact per memory. "Prefers X and uses Y" = two separate memories, not one.
 - Assistant output is CONTEXT ONLY — never attribute assistant actions to the user.
 - Corrections REPLACE old facts. Confirmations reinforce validated approaches.
 - Include temporal context when relevant: "As of [date], user is working on X".
