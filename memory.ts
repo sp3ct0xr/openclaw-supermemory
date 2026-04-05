@@ -55,52 +55,21 @@ export function detectCategory(text: string): MemoryCategory {
 
 export const MAX_ENTITY_CONTEXT_LENGTH = 1500
 
-export const DEFAULT_ENTITY_CONTEXT = `You are a memory extraction system. Analyze user-assistant conversations and extract **atomic facts** — one discrete piece of information per memory.
+export const DEFAULT_ENTITY_CONTEXT = `User-assistant conversation. Format: [role: user]...[user:end] and [role: assistant]...[assistant:end].
 
-Format: [role: user]...[user:end] and [role: assistant]...[assistant:end].
+Extract atomic facts useful in FUTURE conversations. One fact per memory. Most messages are not worth remembering.
 
-## Extraction Rules
+REMEMBER: lasting personal facts, stated preferences, project decisions, corrections to prior info (HIGH priority), confirmations of good approaches, named entities, explicit "remember this" requests.
 
-### DECOMPOSE into atomic facts
-Each memory = ONE fact. Never combine multiple facts into a single memory.
-- BAD:  "User prefers dark mode and uses PostgreSQL and lives in Bangkok"
-- GOOD: "User prefers dark mode" + "User uses PostgreSQL" + "User lives in Bangkok"
+DO NOT REMEMBER: one-time tasks, assistant actions, implementation details, transient intents, unconfirmed suggestions.
 
-### CATEGORIZE each memory
-Assign one: preference | fact | decision | entity | correction | confirmation
-- preference: Explicit likes/dislikes/preferences ("I prefer tabs", "I always use pnpm")
-- fact: Personal details, skills, background ("I work at SpX", "I have a PhD")
-- decision: Project choices ("We'll use PostgreSQL for this", "Going with Cloudflare Workers")
-- entity: Named entities, contacts, identifiers ("My name is PK", emails, phone numbers)
-- correction: User correcting prior information ("No, actually use tabs not spaces")
-- confirmation: User confirming a good approach ("yes exactly", "perfect", "keep doing that")
+CATEGORIES: preference | fact | decision | entity | correction | confirmation
 
-### CONFIDENCE levels
-- EXPLICIT: User directly stated it ("I prefer X") — always extract
-- INFERRED: Pattern from repeated behavior (used X in 3+ conversations) — extract with lower confidence
-- UNCERTAIN: Mentioned once in passing — do NOT extract
-
-### TEMPORAL grounding
-If the memory relates to a specific time, include it: "As of April 2026, user is working on Project X"
-
-### DO extract
-- Lasting personal facts (dietary, location, workplace, tools, routines)
-- Stated preferences and strong opinions
-- Project decisions and architectural choices
-- Corrections to previously stored information (these are HIGH priority)
-- Explicit "remember this" requests
-- Recurring patterns across the conversation
-
-### DO NOT extract
-- One-time task requests ("find X", "write code for Y")
-- Assistant actions (searching, writing files, generating code)
-- Implementation details or in-progress work status
-- Transient intents or session-specific context
-- Anything the assistant suggested that the user didn't confirm
-
-### RULES
-- Assistant output is CONTEXT ONLY — never attribute assistant actions to the user
-- When the user corrects information, the correction REPLACES the old fact
+RULES:
+- ONE fact per memory. "Prefers dark mode and uses PostgreSQL" = two memories, not one.
+- Assistant output is CONTEXT ONLY — never attribute assistant actions to the user.
+- Corrections REPLACE old facts. Confirmations reinforce validated approaches.
+- Include temporal context when relevant: "As of [date], user is working on X".
 - When in doubt, do NOT create a memory. Precision > recall.`
 
 export function clampEntityContext(ctx: string): string {
