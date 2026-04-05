@@ -96,14 +96,30 @@ export function registerIngestTool(
 	} catch (err) {
 		log.warn(`supermemory_ingest: workspace resolution failed: ${err instanceof Error ? err.message : String(err)}`)
 	}
-	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — fail-open, container sandbox is outer guard)"}`)
+
+	// Fallback: if SDK resolution failed, try known OpenClaw workspace paths
+	if (!workspaceDir) {
+		const fallbackPaths = [
+			"/data/.openclaw/workspace",
+			process.env.OPENCLAW_WORKSPACE_DIR,
+			process.cwd(),
+		].filter(Boolean) as string[]
+		for (const candidate of fallbackPaths) {
+			try {
+				if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+					workspaceDir = fs.realpathSync(candidate)
+					log.info(`supermemory_ingest: workspaceDir resolved via fallback: ${workspaceDir}`)
+					break
+				}
+			} catch { /* skip invalid candidate */ }
+		}
+	}
+	log.info(`supermemory_ingest: workspaceDir=${workspaceDir ?? "(undefined — all file reads blocked)"}`)
 
 	function isInsideWorkspace(filePath: string): boolean {
 		if (!workspaceDir) {
-			// Workspace boundary could not be resolved from OpenClaw SDK.
-			// Allow file reads — OpenClaw's own container sandbox is the outer guard.
-			log.debug("supermemory_ingest: workspace boundary not resolved — allowing file read (OpenClaw sandbox is outer guard)")
-			return true
+			log.warn("supermemory_ingest: no workspace boundary resolved — denying file read")
+			return false
 		}
 		try {
 			const resolved = fs.realpathSync(filePath)
