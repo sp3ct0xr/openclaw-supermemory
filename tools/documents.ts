@@ -3,7 +3,6 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { deriveFileType, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
 import { isAllowedPath } from "../path-guard.ts"
 
@@ -316,20 +315,14 @@ export function registerDocumentsTool(
 						}
 					}
 
-					// Auto-detect fileType and mimeType
-					const detectedMime = lookupMime(params.filePath)
-					const mimeType = params.mimeType ?? detectedMime
-					const fileType = params.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)
-
-					log.debug(
-						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected=${detectedMime ?? "none"})`,
-					)
+					// Client auto-detects MIME/fileType from extension; only pass explicit overrides
+					log.debug(`documents tool: upload filePath=${params.filePath}`)
 
 					const uploadResult = await client.uploadFile(
 						params.filePath,
 						{
-							...(fileType && { fileType }),
-							...(mimeType && { mimeType }),
+							...(params.fileType && { fileType: params.fileType }),
+							...(params.mimeType && { mimeType: params.mimeType }),
 							...(params.containerTag && { containerTag: params.containerTag }),
 						},
 					)

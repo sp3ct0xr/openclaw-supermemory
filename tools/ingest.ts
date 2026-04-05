@@ -4,9 +4,22 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { deriveFileType, isTextMime, lookupMime } from "../mime-utils.ts"
+import { isTextMime, lookupMime } from "../mime-utils.ts"
 import { log } from "../logger.ts"
 import { isAllowedPath } from "../path-guard.ts"
+
+/** Build standard ingest metadata with source, timestamp, and caller overrides. */
+function buildIngestMetadata(
+	overrides?: Record<string, string | number | boolean>,
+	extra?: Record<string, string | number | boolean>,
+): Record<string, string | number | boolean> {
+	return {
+		source: "openclaw_ingest",
+		documentDate: new Date().toISOString(),
+		...extra,
+		...overrides,
+	}
+}
 
 // ---------- local-file helpers ----------
 
@@ -118,7 +131,7 @@ export function registerIngestTool(
 					metadata?: Record<string, string | number | boolean>
 				},
 			) {
-				const tag = params.containerTag ?? undefined
+				const tag = params.containerTag
 				let content = params.content
 				let localFilePath: string | undefined
 
@@ -141,24 +154,15 @@ export function registerIngestTool(
 							const classification = classifyFile(resolved)
 
 							if (!classification.isText) {
-								// Binary file → route through uploadFile() (proper SM binary endpoint)
-								const detectedMime = classification.detectedMime
-								const fileType = deriveFileType(detectedMime)
+								// Binary file → route through uploadFile() (client auto-detects MIME)
 								const fileSize = fs.statSync(resolved).size
-
-								log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${detectedMime}, fileType=${fileType ?? "auto"})`)
+								log.debug(`ingest: uploading binary file ${resolved} (${fileSize} bytes, ${classification.detectedMime})`)
 
 								const uploadResult = await client.uploadFile(resolved, {
-									...(fileType && { fileType }),
-									...(detectedMime && { mimeType: detectedMime }),
-									metadata: {
-										source: "openclaw_ingest",
-										documentDate: new Date().toISOString(),
+									metadata: buildIngestMetadata(params.metadata, {
 										sourceFile: resolved,
-										// uploadFile API has no customId param; encode in metadata for traceability
 										...(params.customId && { customId: params.customId }),
-										...params.metadata,
-									},
+									}),
 									containerTag: tag,
 								})
 
@@ -168,15 +172,13 @@ export function registerIngestTool(
 									content: [
 										{
 											type: "text" as const,
-											text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
+											text: `Uploaded: 📁 ${path.basename(resolved)} (${sizeLabel}, ${classification.detectedMime})\nDocument ID: ${uploadResult.id}, Status: ${uploadResult.status}`,
 										},
 									],
 									details: {
 										id: uploadResult.id,
 										status: uploadResult.status,
 										localFile: resolved,
-										detectedMime,
-										fileType,
 									},
 								}
 							}
@@ -227,24 +229,18 @@ export function registerIngestTool(
 						containerTag: tag,
 						customId: params.customId,
 						entityContext: cfg.entityContext,
-						metadata: {
-							source: "openclaw_ingest",
-							documentDate: new Date().toISOString(),
+						metadata: buildIngestMetadata(params.metadata, {
 							...(localFilePath && { sourceFile: localFilePath }),
-							...params.metadata,
-						},
+						}),
 					})
 				} else {
 					// URL or text: use addMemory() which sanitizes content
 					result = await client.addMemory(
 						content,
-						{
-							source: "openclaw_ingest",
-							documentDate: new Date().toISOString(),
+						buildIngestMetadata(params.metadata, {
 							...(isUrl && { contentUrl: content }),
 							...(localFilePath && { sourceFile: localFilePath }),
-							...params.metadata,
-						},
+						}),
 						params.customId,
 						tag,
 						cfg.entityContext,
