@@ -200,7 +200,7 @@ export function buildPromptSection(params: {
 	if (hasIngest) {
 		lines.push(
 			"### Ingesting content",
-			"Use supermemory_ingest to add external content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint.",
+			"Use supermemory_ingest as the **primary tool** for adding any content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint. Prefer this over supermemory_documents upload.",
 			"",
 			"**Params:** `content` (URL, text, or file path), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
 			"**Supported content:**",
@@ -228,9 +228,9 @@ export function buildPromptSection(params: {
 	if (params.availableTools.has("supermemory_documents")) {
 		lines.push(
 			"### Document management",
-			"Use supermemory_documents to inspect, browse, update, upload, or delete ingested documents.",
+			"Use supermemory_documents to **manage** already-ingested documents (inspect, browse, update, delete). For adding new content, prefer supermemory_ingest instead.",
 			"",
-			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file (PDF, DOC, DOCX, images, audio, video — MIME auto-detected). `action: 'delete'` + `documentId` to remove.",
+			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file directly (use only when you need explicit fileType/mimeType override — otherwise use supermemory_ingest). `action: 'delete'` + `documentId` to remove.",
 			"",
 		)
 	}
