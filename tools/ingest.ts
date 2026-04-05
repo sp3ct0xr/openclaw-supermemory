@@ -104,7 +104,10 @@ export function registerIngestTool(
 		}
 		try {
 			const resolved = fs.realpathSync(filePath)
-			return resolved.startsWith(workspaceDir + "/") || resolved === workspaceDir
+			if (resolved === workspaceDir) return true
+			const rel = path.relative(workspaceDir, resolved)
+			// Must not escape via ".." and must not be an absolute path
+			return !rel.startsWith("..") && !path.isAbsolute(rel)
 		} catch {
 			return false // can't resolve (e.g. broken symlink) = reject
 		}
