@@ -156,6 +156,11 @@ export function buildPromptSection(params: {
 			"**Temporal filters:** Use `after` and `before` (ISO dates) to scope search to a time range (e.g. 'what did the user say last week').",
 			"**Reranking:** Use `rerank: true` for better result ordering (+~100ms). Auto-enabled in deep mode.",
 			"",
+			"### Trusting recalled memories",
+			"Memories reflect what was true *when stored*. A memory naming a file, function, or config is a claim it existed at that time — verify it still exists before recommending.",
+			"If a search result shows ⏱ (stale), treat it as a lead to investigate, not a fact to assert.",
+			"When in doubt, check the filesystem or codebase before citing a memory as current fact.",
+			"",
 		)
 	}
 	if (hasStore) {
@@ -164,7 +169,7 @@ export function buildPromptSection(params: {
 			"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
 			"",
 			"**Atomic facts**: Store ONE fact per call. Instead of \"User likes dark mode and uses pnpm\", make two separate calls.",
-			"**Categories**: The tool auto-detects category (preference/fact/decision/entity/correction) but you can override. Corrections are HIGH priority — they replace outdated information.",
+			"**Categories**: The tool auto-detects category (preference/fact/decision/entity/correction/confirmation) but you can override. Corrections are HIGH priority — they replace outdated information. Confirmations reinforce validated approaches.",
 			"**Deduplication**: The store automatically checks for similar existing memories. If a near-duplicate exists, it updates the existing memory instead of creating a new one.",
 			"",
 		)
@@ -185,18 +190,20 @@ export function buildPromptSection(params: {
 			"### Forgetting memories",
 			"Use supermemory_forget when the user asks to delete or remove a specific memory, when information is outdated or incorrect and the user wants it gone, or when the user says \"forget that\", \"delete that memory\", or \"remove what you know about X\".",
 			"",
-			"**Params:** `memoryId` (direct delete) or `query` (search-then-delete the closest match). Optional: `reason` (audit trail), `containerTag`.",
+			"**Params:** `memoryId` (direct delete) or `query` (search-then-delete). Optional: `reason` (audit trail), `containerTag`.",
+			"**Thresholds:** Query-based forget uses similarity thresholds: ≥0.80 = batch delete all matches, 0.75–0.79 = delete best match only, <0.75 = refuse (too uncertain).",
 			"",
 		)
 	}
 	if (hasIngest) {
 		lines.push(
 			"### Ingesting content",
-			"Use supermemory_ingest to add external content to memory. Pass a URL or raw text — Supermemory auto-detects the format and extracts memories.",
+			"Use supermemory_ingest to add external content to memory. Pass a URL, raw text, or local file path — Supermemory auto-detects the format and extracts memories.",
 			"",
-			"**Params:** `content` (URL or text, required), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
+			"**Params:** `content` (URL, text, or file path), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
 			"**Supported content:**",
 			"- URLs: web pages, hosted PDFs, YouTube videos (auto-transcribed) — just pass the URL",
+			"- Local files: pass a file path (e.g. `/workspace/docs/README.md`) — text files read as UTF-8, binary files (PDF, images, audio, video) auto-encoded as base64. Restricted to agent workspace.",
 			"- Text: plaintext, markdown, HTML, JSON, CSV",
 			"- Binary: base64-encode PDFs (OCR), images (OCR + visual description), audio/video (transcription + speaker detection)",
 			"",
@@ -217,9 +224,9 @@ export function buildPromptSection(params: {
 	if (params.availableTools.has("supermemory_documents")) {
 		lines.push(
 			"### Document management",
-			"Use supermemory_documents to inspect, browse, or delete ingested documents.",
+			"Use supermemory_documents to inspect, browse, update, upload, or delete ingested documents.",
 			"",
-			"**Actions:** `action: 'get'` + `documentId` to inspect a document (content, summary, status). `action: 'list'` to browse with `sort`/`order`/`page`/`limit`. `action: 'processing'` to see pipeline status. `action: 'delete'` + `documentId` to remove.",
+			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file (PDF, images, audio, video). `action: 'delete'` + `documentId` to remove.",
 			"",
 		)
 	}
