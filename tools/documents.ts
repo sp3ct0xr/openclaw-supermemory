@@ -1,24 +1,16 @@
 import fs from "node:fs"
-import path from "node:path"
 import { Type } from "@sinclair/typebox"
+import mime from "mime-types"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
-/** Map file extensions to { fileType, mimeType } for the Supermemory upload API. */
-const MIME_MAP: Record<string, { fileType: string; mimeType: string }> = {
-	".png":  { fileType: "image", mimeType: "image/png" },
-	".jpg":  { fileType: "image", mimeType: "image/jpeg" },
-	".jpeg": { fileType: "image", mimeType: "image/jpeg" },
-	".gif":  { fileType: "image", mimeType: "image/gif" },
-	".webp": { fileType: "image", mimeType: "image/webp" },
-	".pdf":  { fileType: "pdf",   mimeType: "application/pdf" },
-	".mp4":  { fileType: "video", mimeType: "video/mp4" },
-	".webm": { fileType: "video", mimeType: "video/webm" },
-	".mp3":  { fileType: "audio", mimeType: "audio/mpeg" },
-	".wav":  { fileType: "audio", mimeType: "audio/wav" },
-	".ogg":  { fileType: "audio", mimeType: "audio/ogg" },
+/** Derive Supermemory SDK fileType from a MIME string (e.g. "image/png" → "image"). */
+function deriveFileType(mimeStr: string): string | undefined {
+	if (mimeStr === "application/pdf") return "pdf"
+	const category = mimeStr.split("/")[0]
+	return ["image", "video", "audio"].includes(category) ? category : undefined
 }
 
 export function registerDocumentsTool(
@@ -318,14 +310,13 @@ export function registerDocumentsTool(
 						}
 					}
 
-					// Auto-detect fileType and mimeType from extension when not explicitly provided
-					const ext = path.extname(params.filePath).toLowerCase()
-					const detected = MIME_MAP[ext]
-					const fileType = params.fileType ?? detected?.fileType
-					const mimeType = params.mimeType ?? detected?.mimeType
+					// Auto-detect fileType and mimeType from extension via mime-types (IANA registry)
+					const detectedMime = mime.lookup(params.filePath) || undefined
+					const mimeType = params.mimeType ?? detectedMime
+					const fileType = params.fileType ?? (detectedMime ? deriveFileType(detectedMime) : undefined)
 
 					log.debug(
-						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected ext=${ext})`,
+						`documents tool: upload filePath=${params.filePath} fileType=${fileType ?? "auto"} mimeType=${mimeType ?? "auto"} (detected=${detectedMime ?? "none"})`,
 					)
 					const uploadResult = await client.uploadFile(
 						params.filePath,
