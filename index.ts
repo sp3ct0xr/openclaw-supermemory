@@ -105,8 +105,13 @@ export default {
 
 		if (cfg.autoRecall) {
 			const recallHandler = buildRecallHandler(client, cfg)
+			// Migrated from deprecated before_agent_start → before_prompt_build
+			// per docs.openclaw.ai/plugins/architecture#legacy-hooks:
+			// "prefer before_prompt_build for prompt mutation work"
+			// Same event shape { prompt, messages } and return { prependContext }
+			// ctx.sessionKey confirmed available in both hooks (verified in core source)
 			api.on(
-				"before_agent_start",
+				"before_prompt_build",
 				(event: Record<string, unknown>, ctx: Record<string, unknown>) => {
 					if (ctx.sessionKey) sessionKey = ctx.sessionKey as string
 					return recallHandler(event, ctx)
