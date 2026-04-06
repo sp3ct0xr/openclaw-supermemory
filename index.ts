@@ -60,6 +60,9 @@ export default {
 		}
 
 		const client = new SupermemoryClient(cfg.apiKey, cfg.containerTag)
+		if (cfg.v4FetchTimeoutMs !== 10_000) {
+			client.setV4FetchTimeout(cfg.v4FetchTimeoutMs)
+		}
 
 		let sessionKey: string | undefined
 		const getSessionKey = () => sessionKey

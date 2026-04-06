@@ -2,6 +2,11 @@ import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
+/** Default minimum similarity for PostCompact re-injection results */
+const DEFAULT_POST_COMPACT_THRESHOLD = 0.6
+/** Max memories to re-inject after compaction */
+const POST_COMPACT_LIMIT = 5
+
 /**
  * PostCompact hook handler (P2 item #8).
  *
@@ -46,10 +51,11 @@ export function buildPostCompactHandler(
 
 			log.debug(`PostCompact: searching SM with query "${query.slice(0, 80)}"`)
 
-			const results = await client.search(query, 5, undefined, {
+			const threshold = _cfg.postCompactThreshold ?? DEFAULT_POST_COMPACT_THRESHOLD
+			const results = await client.search(query, POST_COMPACT_LIMIT, undefined, {
 				searchMode: "hybrid",
 				rerank: true,
-				threshold: 0.6,
+				threshold,
 			})
 
 			if (results.length === 0) {

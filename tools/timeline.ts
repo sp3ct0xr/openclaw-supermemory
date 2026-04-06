@@ -61,7 +61,11 @@ export function registerTimelineTool(
 					containerTag?: string
 				},
 			) {
-				const limit = Math.min(params.limit ?? 10, 30)
+				// Clamp limit to valid integer range (handles 0, negative, non-integer)
+				const rawLimit = typeof params.limit === "number" && Number.isFinite(params.limit)
+					? params.limit
+					: 10
+				const limit = Math.max(1, Math.min(Math.floor(rawLimit), 30))
 				// Fetch more than needed to ensure good coverage after sorting
 				const fetchLimit = Math.min(limit * 2, 30)
 
@@ -97,11 +101,16 @@ export function registerTimelineTool(
 				}
 
 				// Sort by documentDate ascending (chronological)
+				// Safely extract date: metadata fields may be non-string at runtime
 				const sorted = results
-					.map((r) => ({
-						...r,
-						date: (r.metadata?.documentDate as string) ?? r.metadata?.updatedAt as string ?? "",
-					}))
+					.map((r) => {
+						const docDate = r.metadata?.documentDate
+						const fallback = r.metadata?.timestamp ?? r.metadata?.updatedAt
+						const raw = typeof docDate === "string" ? docDate
+							: typeof fallback === "string" ? fallback
+							: ""
+						return { ...r, date: raw }
+					})
 					.sort((a, b) => {
 						if (!a.date && !b.date) return 0
 						if (!a.date) return 1

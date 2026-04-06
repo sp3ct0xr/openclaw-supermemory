@@ -18,6 +18,11 @@ export type SupermemoryConfig = {
 	/** TTL in milliseconds for SM profile cache. Default: 60000 (60s).
 	 *  Reduces API calls by caching profile responses between turns. */
 	profileCacheTtlMs: number
+	/** Minimum similarity threshold for PostCompact SM re-injection. Default: 0.6.
+	 *  Higher = fewer but more relevant memories re-injected after compaction. */
+	postCompactThreshold: number
+	/** Timeout in ms for raw SM v4 API calls (createMemoryDirect). Default: 10000 (10s). */
+	v4FetchTimeoutMs: number
 	captureMode: CaptureMode
 	entityContext: string
 	debug: boolean
@@ -44,6 +49,8 @@ const ALLOWED_KEYS = [
 	"maxRecallResults",
 	"profileFrequency",
 	"profileCacheTtlMs",
+	"postCompactThreshold",
+	"v4FetchTimeoutMs",
 	"captureMode",
 	"entityContext",
 	"debug",
@@ -134,6 +141,8 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		maxRecallResults: (cfg.maxRecallResults as number) ?? 10,
 		profileFrequency: (cfg.profileFrequency as number) ?? 50,
 		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 60_000,
+		postCompactThreshold: (cfg.postCompactThreshold as number) ?? 0.6,
+		v4FetchTimeoutMs: (cfg.v4FetchTimeoutMs as number) ?? 10_000,
 		captureMode:
 			cfg.captureMode === "everything"
 				? ("everything" as const)
@@ -182,6 +191,8 @@ export const supermemoryConfigSchema = {
 			maxRecallResults: { type: "number" },
 			profileFrequency: { type: "number" },
 			profileCacheTtlMs: { type: "number" },
+			postCompactThreshold: { type: "number" },
+			v4FetchTimeoutMs: { type: "number" },
 			captureMode: { type: "string", enum: ["all", "everything"] },
 			entityContext: { type: "string" },
 			debug: { type: "boolean" },
