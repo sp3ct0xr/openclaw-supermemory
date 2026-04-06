@@ -9,6 +9,8 @@ import {
 	validateContainerTag,
 } from "./lib/validate.js"
 import { log } from "./logger.ts"
+import { stripInboundMetadata } from "./memory.ts"
+import { stripRuntimeContext } from "./utils/strip-runtime-context.ts"
 import { textSimilarity, DEDUP_SIMILARITY_THRESHOLD } from "./utils/text-similarity.ts"
 
 // ── Threshold constants (battle-tested in PRs #12-14) ──
@@ -765,6 +767,129 @@ export class SupermemoryClient {
 
 			log.debugResponse("v4.memories.create", { id: mem.id, isStatic: mem.isStatic })
 			return mem
+		} finally {
+			clearTimeout(timeout)
+		}
+	}
+
+	/**
+	 * Ingest conversation messages via SM v4 Conversations API.
+	 * Passes structured messages directly — SM extracts facts from conversation context.
+	 * Incremental: same conversationId appends new messages.
+	 */
+	async ingestConversation(params: {
+		conversationId: string
+		messages: Array<{
+			role: string
+			content: string | Array<{ type: string; text?: string; [key: string]: unknown }>
+			name?: string
+			tool_calls?: unknown[]
+			tool_call_id?: string
+			[key: string]: unknown
+		}>
+		containerTags?: string[]
+		metadata?: Record<string, string | number | boolean>
+	}): Promise<{ ok: boolean; ingestedMessageCount: number }> {
+		// Sanitize message content — strip inbound metadata + runtime context
+		const sanitizedMessages = params.messages
+			.map((msg) => {
+				let content = msg.content
+				if (typeof content === "string") {
+					const stripped = msg.role === "user"
+						? stripRuntimeContext(stripInboundMetadata(content)).trim()
+						: stripRuntimeContext(content).trim()
+					content = stripped
+				} else if (Array.isArray(content)) {
+					content = content
+						.map((block) => {
+							if (block.type === "text" && typeof block.text === "string") {
+								const stripped = msg.role === "user"
+									? stripRuntimeContext(stripInboundMetadata(block.text)).trim()
+									: stripRuntimeContext(block.text).trim()
+								return { ...block, text: stripped }
+							}
+							return block
+						})
+						.filter((block) => {
+							if (block.type === "text" && typeof block.text === "string") {
+								return block.text.length > 0
+							}
+							return true
+						})
+				}
+				return {
+					role: msg.role,
+					content,
+					...(msg.name && { name: msg.name }),
+				...(msg.tool_calls && {
+					tool_calls: (msg.tool_calls as Array<Record<string, unknown>>).map((tc) => {
+						if (tc.function && typeof (tc.function as Record<string, unknown>).arguments === "string") {
+							return {
+								...tc,
+								function: {
+									...(tc.function as Record<string, unknown>),
+									arguments: stripRuntimeContext((tc.function as Record<string, unknown>).arguments as string),
+								},
+							}
+						}
+						return tc
+					}),
+				}),
+					...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
+				}
+			})
+			.filter((msg) => {
+				// Filter out empty messages after sanitization
+				if (typeof msg.content === "string") return msg.content.length > 0
+				if (Array.isArray(msg.content)) return msg.content.length > 0
+				return false
+			})
+
+		if (sanitizedMessages.length === 0) {
+			log.debug("ingestConversation: all messages empty after sanitization, skipping")
+			return { ok: true, ingestedMessageCount: 0 }
+		}
+
+		const tags = params.containerTags ?? [this.containerTag]
+
+		log.debugRequest("v4.conversations", {
+			conversationId: params.conversationId,
+			messageCount: sanitizedMessages.length,
+			containerTags: tags,
+		})
+
+		const controller = new AbortController()
+		const timeout = setTimeout(
+			() => controller.abort(),
+			this.v4FetchTimeoutMs,
+		)
+
+		try {
+			const response = await fetch(
+				`${SupermemoryClient.SM_V4_BASE}/v4/conversations`,
+				{
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${this.apiKey}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						conversationId: params.conversationId,
+						messages: sanitizedMessages,
+						containerTags: tags,
+						...(params.metadata && { metadata: params.metadata }),
+					}),
+					signal: controller.signal,
+				},
+			)
+
+			if (!response.ok) {
+				const text = await response.text().catch(() => "")
+				throw new Error(`SM v4 conversations failed (${response.status}): ${text.slice(0, 200)}`)
+			}
+
+			log.debugResponse("v4.conversations", { ok: true, messageCount: sanitizedMessages.length })
+			return { ok: true, ingestedMessageCount: sanitizedMessages.length }
 		} finally {
 			clearTimeout(timeout)
 		}

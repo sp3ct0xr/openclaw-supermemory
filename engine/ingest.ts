@@ -69,37 +69,53 @@ export function buildIngestBatchHandler(
 			return { ingestedCount: 0 }
 		}
 
-		// Format messages as session text for SM ingestion
-		const formatted = params.messages
-			.map(formatMessageText)
-			.filter((t) => t.length > 0)
-			.join("\n\n")
-
-		if (!formatted) {
-			log.debug("CE ingestBatch: all messages were runtime-only context, skipping")
-			return { ingestedCount: 0 }
-		}
-		const customId = `session_${params.sessionId}_turn_${Date.now()}`
 		const msgIds = params.messages.map(
 			(_, i) => `${params.sessionId}_batch_${Date.now()}_${i}`,
 		)
 
 		try {
-			await client.addMemory(
-				formatted,
-				{
-					source: "openclaw_ce",
-					documentDate: new Date().toISOString(),
-					sessionId: params.sessionId,
-				},
-				customId,
-				undefined, // use default containerTag
-				cfg.entityContext,
-			)
+		if (cfg.useConversationsApi) {
+				// v4 Conversations API — pass structured messages directly
+				const convResult = await client.ingestConversation({
+					conversationId: params.sessionId,
+					messages: params.messages,
+					containerTags: [cfg.containerTag],
+					metadata: {
+						source: "openclaw_ce",
+						documentDate: new Date().toISOString(),
+					},
+				})
+				if (convResult.ingestedMessageCount === 0) {
+					log.debug("CE ingestBatch: all messages empty after sanitization, skipping")
+					return { ingestedCount: 0 }
+				}
+			} else {
+				// Legacy: flatten to text and use addMemory
+				const formatted = params.messages
+					.map(formatMessageText)
+					.filter((t) => t.length > 0)
+					.join("\n\n")
+				if (!formatted) {
+					log.debug("CE ingestBatch: all messages were runtime-only context, skipping")
+					return { ingestedCount: 0 }
+				}
+				const customId = `session_${params.sessionId}_turn_${Date.now()}`
+				await client.addMemory(
+					formatted,
+					{
+						source: "openclaw_ce",
+						documentDate: new Date().toISOString(),
+						sessionId: params.sessionId,
+					},
+					customId,
+					undefined,
+					cfg.entityContext,
+				)
+			}
 
 			// Mark all messages as ingested
 			tracker.markAllIngested(msgIds)
-			log.debug(`CE ingestBatch: ingested ${params.messages.length} messages`)
+			log.debug(`CE ingestBatch: ingested ${params.messages.length} messages (${cfg.useConversationsApi ? "conversations" : "legacy"})`)
 
 			// Recovery: if outage buffer has pending entries, flush them
 			if (!outageBuffer.isEmpty()) {
@@ -110,18 +126,30 @@ export function buildIngestBatchHandler(
 				for (let i = 0; i < buffered.length; i++) {
 					const entry = buffered[i]!
 					try {
-						const entryText = entry.messages.map(formatMessageText).join("\n\n")
-						await client.addMemory(
-							entryText,
-							{
-								source: "openclaw_ce_recovery",
-								documentDate: entry.timestamp,
-								sessionId: entry.sessionId,
-							},
-							`recovery_${entry.sessionId}_${entry.timestamp}`,
-							undefined,
-							cfg.entityContext,
-						)
+						if (cfg.useConversationsApi) {
+							await client.ingestConversation({
+								conversationId: entry.sessionId,
+								messages: entry.messages,
+								containerTags: [cfg.containerTag],
+								metadata: {
+									source: "openclaw_ce_recovery",
+									documentDate: entry.timestamp,
+								},
+							})
+						} else {
+							const entryText = entry.messages.map(formatMessageText).join("\n\n")
+							await client.addMemory(
+								entryText,
+								{
+									source: "openclaw_ce_recovery",
+									documentDate: entry.timestamp,
+									sessionId: entry.sessionId,
+								},
+								`recovery_${entry.sessionId}_${entry.timestamp}`,
+								undefined,
+								cfg.entityContext,
+							)
+						}
 						flushed++
 					} catch {
 						// Re-buffer failed entry + all remaining unprocessed entries
