@@ -7,7 +7,7 @@ import { log } from "../logger.ts"
 export function registerForgetTool(
 	api: OpenClawPluginApi,
 	client: SupermemoryClient,
-	_cfg: SupermemoryConfig,
+	cfg: SupermemoryConfig,
 ): void {
 	api.registerTool(
 		{
@@ -62,6 +62,22 @@ export function registerForgetTool(
 					log.debug(
 						`forget tool: search-then-delete query="${params.query}" reason="${params.reason ?? "none"}" containerTag="${params.containerTag ?? "default"}"`,
 					)
+					// When a topic container is specified, also try root
+					const rootTag = client.getContainerTag()
+					if (params.containerTag && cfg.enableCustomContainerTags && params.containerTag !== rootTag) {
+						// Try topic container first, fall back to root
+						const topicResult = await client.forgetByQuery(params.query!, params.containerTag)
+						if (topicResult.success) {
+							return {
+								content: [{ type: "text" as const, text: topicResult.message }],
+							}
+						}
+						// Not found in topic container, try root
+						const rootResult = await client.forgetByQuery(params.query!, rootTag)
+						return {
+							content: [{ type: "text" as const, text: rootResult.message }],
+						}
+					}
 					const result = await client.forgetByQuery(
 						params.query,
 						params.containerTag,

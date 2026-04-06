@@ -4,10 +4,20 @@ import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 
+/** Extract a sortable timestamp from a search result. */
+function getResultTimestamp(r: { metadata?: Record<string, unknown> }): number {
+	const raw = (r.metadata?.documentDate as string | undefined)
+		?? (r.metadata?.timestamp as string | undefined)
+		?? (r.metadata?.updatedAt as string | undefined)
+	if (!raw) return 0
+	const t = new Date(raw).getTime()
+	return Number.isNaN(t) ? 0 : t
+}
+
 export function registerUpdateTool(
 	api: OpenClawPluginApi,
 	client: SupermemoryClient,
-	_cfg: SupermemoryConfig,
+	cfg: SupermemoryConfig,
 ): void {
 	api.registerTool(
 		{
@@ -77,11 +87,29 @@ export function registerUpdateTool(
 					log.debug(
 						`update tool: searching for memory matching query="${params.query}"`,
 					)
-					const results = await client.search(
-						params.query,
-						1,
-						params.containerTag,
-					)
+					// When a topic container is specified, also search root
+					const rootTag = client.getContainerTag()
+					let results: Awaited<ReturnType<typeof client.search>>
+					if (params.containerTag && cfg.enableCustomContainerTags && params.containerTag !== rootTag) {
+						const [rootResults, topicResults] = await Promise.all([
+							client.search(params.query!, 1, rootTag),
+							client.search(params.query!, 1, params.containerTag),
+						])
+						results = [...topicResults, ...rootResults]
+							.sort((a, b) => {
+								const ta = getResultTimestamp(a)
+								const tb = getResultTimestamp(b)
+								if (ta !== tb) return tb - ta
+								return (b.similarity ?? 0) - (a.similarity ?? 0)
+							})
+							.slice(0, 1)
+					} else {
+						results = await client.search(
+							params.query,
+							1,
+							params.containerTag,
+						)
+					}
 					const topMatch = results[0]
 					if (results.length === 0 || !topMatch) {
 						return {

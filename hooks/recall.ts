@@ -220,19 +220,13 @@ function formatContainerMetadata(
 	lines.push("")
 	lines.push("Container routing:")
 	lines.push(
-		"- When the topic clearly matches a container, pass `containerTag` on search/store/update/forget/timeline calls. Example: user asks about crypto → search with containerTag='crypto'.",
+		"- **Searching**: Pass containerTag matching the topic — root is automatically included alongside it. Example: user asks about crypto → search with containerTag='crypto' (searches crypto + root). Omitting containerTag searches root only.",
 	)
 	lines.push(
-		"- Omitting containerTag defaults to root. Memories stored in a topic container are only searchable in that container.",
+		"- **Storing**: Pass containerTag matching the topic when storing. Example: storing a crypto fact → containerTag='crypto'. Omitting containerTag stores to root.",
 	)
 	lines.push(
 		"- Profile, settings, and auto-recall use root by default — no containerTag needed.",
-	)
-	lines.push(
-		"- For cross-topic queries, search each relevant container separately.",
-	)
-	lines.push(
-		"- When unsure, try the most likely container first, then root as fallback.",
 	)
 
 	return lines.join("\n")

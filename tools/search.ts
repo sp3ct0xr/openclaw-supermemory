@@ -11,6 +11,28 @@ import { log } from "../logger.ts"
 
 const MS_PER_DAY = 86_400_000
 
+/** Extract a sortable timestamp from a search result (newest = highest). */
+function getResultTimestamp(r: { metadata?: Record<string, unknown> | null; updatedAt?: string }): number {
+	const raw = (r.metadata?.documentDate as string | undefined)
+		?? (r.metadata?.timestamp as string | undefined)
+		?? (r.metadata?.updatedAt as string | undefined)
+		?? r.updatedAt
+	if (!raw) return 0
+	const t = new Date(raw).getTime()
+	return Number.isNaN(t) ? 0 : t
+}
+
+/** Sort by date descending (freshest first), similarity as tiebreaker. */
+function compareFreshness(
+	a: { similarity?: number; score?: number; metadata?: Record<string, unknown> | null; updatedAt?: string },
+	b: { similarity?: number; score?: number; metadata?: Record<string, unknown> | null; updatedAt?: string },
+): number {
+	const ta = getResultTimestamp(a)
+	const tb = getResultTimestamp(b)
+	if (ta !== tb) return tb - ta // newest first
+	return (b.similarity ?? b.score ?? 0) - (a.similarity ?? a.score ?? 0) // tiebreaker
+}
+
 /**
  * Compute a freshness tag from a date string.
  * Returns "" if < 7 days or no date, a mild warning for 7-30 days,
@@ -147,18 +169,39 @@ export function registerSearchTool(
 
 				// --- Deep mode: search.memories() with reranking ---
 				if (mode === "deep") {
-					const deepResults = await client.deepSearch(
-						params.query,
-						{
-							limit,
-							rerank: params.rerank ?? true,
-							...(params.rewriteQuery !== undefined && { rewriteQuery: params.rewriteQuery }),
-							...(filters && { filters }),
-							...(params.containerTag && {
-								containerTag: params.containerTag,
-							}),
-						},
-					)
+					const deepOpts = {
+						limit,
+						rerank: params.rerank ?? true,
+						...(params.rewriteQuery !== undefined && { rewriteQuery: params.rewriteQuery }),
+						...(filters && { filters }),
+					}
+
+					// Root+topic dual deep search
+					const rootTag = client.getContainerTag()
+					let deepResults: DeepSearchResult[]
+					if (params.containerTag && cfg.enableCustomContainerTags && params.containerTag !== rootTag) {
+						log.debug(`search tool: deep dual search — root + ${params.containerTag}`)
+						const [rootResults, topicResults] = await Promise.all([
+							client.deepSearch(params.query, { ...deepOpts, containerTag: rootTag }),
+							client.deepSearch(params.query, { ...deepOpts, containerTag: params.containerTag }),
+						])
+						const seen = new Set<string>()
+						const merged: DeepSearchResult[] = []
+						for (const r of [...topicResults, ...rootResults]) {
+							if (!seen.has(r.id)) {
+								seen.add(r.id)
+								merged.push(r)
+							}
+						}
+						deepResults = merged
+							.sort(compareFreshness)
+							.slice(0, limit)
+					} else {
+						deepResults = await client.deepSearch(
+							params.query,
+							{ ...deepOpts, ...(params.containerTag && { containerTag: params.containerTag }) },
+						)
+					}
 
 					if (deepResults.length === 0) {
 						return {
@@ -209,12 +252,33 @@ export function registerSearchTool(
 					...(filters && { filters }),
 				}
 
-				results = await client.search(
-					params.query,
-					limit,
-					params.containerTag,
-					searchOpts,
-				)
+				// When a topic container is specified, also search root for baseline context
+				const rootTag = client.getContainerTag()
+				if (params.containerTag && cfg.enableCustomContainerTags && params.containerTag !== rootTag) {
+					log.debug(`search tool: dual search — root + ${params.containerTag}`)
+					const [rootResults, topicResults] = await Promise.all([
+						client.search(params.query, limit, rootTag, searchOpts),
+						client.search(params.query, limit, params.containerTag, searchOpts),
+					])
+					const seen = new Set<string>()
+					const merged: SearchResult[] = []
+					for (const r of [...topicResults, ...rootResults]) {
+						if (!seen.has(r.id)) {
+							seen.add(r.id)
+							merged.push(r)
+						}
+					}
+					results = merged
+						.sort(compareFreshness)
+						.slice(0, limit)
+				} else {
+					results = await client.search(
+						params.query,
+						limit,
+						params.containerTag,
+						searchOpts,
+					)
+				}
 
 				if (results.length === 0) {
 					return {

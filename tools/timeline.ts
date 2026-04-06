@@ -18,7 +18,7 @@ function formatDate(iso: string | undefined | null): string {
 export function registerTimelineTool(
 	api: OpenClawPluginApi,
 	client: SupermemoryClient,
-	_cfg: SupermemoryConfig,
+	cfg: SupermemoryConfig,
 ): void {
 	api.registerTool(
 		{
@@ -78,16 +78,36 @@ export function registerTimelineTool(
 					`timeline tool: topic="${params.topic}" limit=${limit} after=${params.after ?? "none"} before=${params.before ?? "none"}`,
 				)
 
-				const results = await client.search(
-					params.topic,
-					fetchLimit,
-					params.containerTag,
-					{
-						searchMode: "hybrid",
-						rerank: true,
-						...(filters && { filters }),
-					},
-				)
+				// When a topic container is specified, also search root for baseline context
+				const searchOpts = {
+					searchMode: "hybrid" as const,
+					rerank: true,
+					...(filters && { filters }),
+				}
+				const rootTag = client.getContainerTag()
+				let results: Awaited<ReturnType<typeof client.search>>
+				if (params.containerTag && cfg.enableCustomContainerTags && params.containerTag !== rootTag) {
+					const [rootResults, topicResults] = await Promise.all([
+						client.search(params.topic, fetchLimit, rootTag, searchOpts),
+						client.search(params.topic, fetchLimit, params.containerTag, searchOpts),
+					])
+					const seen = new Set<string>()
+					const merged: typeof results = []
+					for (const r of [...topicResults, ...rootResults]) {
+						if (!seen.has(r.id)) {
+							seen.add(r.id)
+							merged.push(r)
+						}
+					}
+					results = merged
+				} else {
+					results = await client.search(
+						params.topic,
+						fetchLimit,
+						params.containerTag,
+						searchOpts,
+					)
+				}
 
 				if (results.length === 0) {
 					return {
