@@ -80,6 +80,24 @@
 			"label": "Enable LLM Filtering",
 			"help": "Enable server-side LLM filtering during ingestion. Must be enabled for Filter Prompt to take effect. Auto-enabled when Filter Prompt is set. Disable to save server tokens (raw indexing only).",
 			"advanced": true
+		},
+		"profileCacheTtlMs": {
+			"label": "Profile Cache TTL (ms)",
+			"placeholder": "60000",
+			"help": "How long to cache the SM user profile before re-fetching (milliseconds). Default: 60000 (60s). Lower = fresher profile but more API calls.",
+			"advanced": true
+		},
+		"postCompactThreshold": {
+			"label": "PostCompact Similarity Threshold",
+			"placeholder": "0.6",
+			"help": "Minimum similarity for SM memories re-injected after compaction. Higher = fewer but more relevant results. Range: 0.0-1.0. Default: 0.6.",
+			"advanced": true
+		},
+		"v4FetchTimeoutMs": {
+			"label": "V4 API Timeout (ms)",
+			"placeholder": "10000",
+			"help": "Timeout for SM v4 direct memory creation API calls (milliseconds). Default: 10000 (10s). Increase on slow networks.",
+			"advanced": true
 		}
 	},
 	"configSchema": {
@@ -110,7 +128,10 @@
 			"customContainerInstructions": { "type": "string" },
 			"categoryRouting": { "type": "boolean" },
 			"filterPrompt": { "type": "string" },
-			"shouldLLMFilter": { "type": "boolean" }
+			"shouldLLMFilter": { "type": "boolean" },
+			"profileCacheTtlMs": { "type": "number", "minimum": 0 },
+			"postCompactThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+			"v4FetchTimeoutMs": { "type": "number", "minimum": 1000 }
 		},
 		"required": []
 	}
