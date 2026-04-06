@@ -200,9 +200,9 @@ function formatContainerMetadata(
 
 	const lines: string[] = []
 
-	lines.push(`Root container: \`${cfg.containerTag}\``)
+	lines.push(`Root container: \`${cfg.containerTag}\` (personal facts, general preferences, anything not matching a specific container)`)
 	lines.push("")
-	lines.push("Custom memory containers:")
+	lines.push("Topic containers:")
 	for (const c of cfg.customContainers) {
 		lines.push(`- \`${c.tag}\`: ${c.description}`)
 	}
@@ -218,8 +218,21 @@ function formatContainerMetadata(
 	}
 
 	lines.push("")
+	lines.push("Container routing:")
 	lines.push(
-		"Use containerTag parameter to store in a specific container, otherwise stores to root.",
+		"- When the topic clearly matches a container, pass `containerTag` on search/store/update/forget/timeline calls. Example: user asks about crypto → search with containerTag='crypto'.",
+	)
+	lines.push(
+		"- Omitting containerTag defaults to root. Memories stored in a topic container are only searchable in that container.",
+	)
+	lines.push(
+		"- Profile, settings, and auto-recall use root by default — no containerTag needed.",
+	)
+	lines.push(
+		"- For cross-topic queries, search each relevant container separately.",
+	)
+	lines.push(
+		"- When unsure, try the most likely container first, then root as fallback.",
 	)
 
 	return lines.join("\n")
