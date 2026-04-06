@@ -9,6 +9,7 @@ import {
 	MEMORY_CATEGORIES,
 	type MemoryCategory,
 } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 export function registerStoreTool(
 	api: OpenClawPluginApi,
@@ -63,6 +64,14 @@ export function registerStoreTool(
 					containerTag?: string
 				},
 			) {
+				// Security: strip runtime context (session keys, internal metadata) from stored content
+				params.text = stripRuntimeContext(params.text).trim()
+				if (!params.text) {
+					return {
+						content: [{ type: "text" as const, text: "Nothing to store after removing runtime metadata." }],
+					}
+				}
+
 				const category = (params.category ??
 					detectCategory(params.text)) as MemoryCategory
 				const sk = getSessionKey()

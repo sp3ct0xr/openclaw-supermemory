@@ -2,6 +2,7 @@ import type { ProfileResult, ProfileSearchResult, SupermemoryClient } from "../c
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../utils/text-similarity.ts"
 
 // ── Profile cache with TTL (P1 item #2) ──
@@ -256,7 +257,7 @@ export function buildRecallHandler(
 		const isNewSession = turn === 0
 		const includeProfile = isNewSession || turn % cfg.profileFrequency === 0
 		const messageProvider = ctx?.messageProvider as string | undefined
-		const query = isNewSession ? undefined : stripInboundMetadata(rawPrompt)
+		const query = isNewSession ? undefined : stripRuntimeContext(stripInboundMetadata(rawPrompt)).trim() || undefined
 
 		log.debug(
 			`recalling for turn ${turn} (profile: ${includeProfile}, newSession: ${isNewSession})`,

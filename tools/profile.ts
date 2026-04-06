@@ -3,6 +3,8 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 export function registerProfileTool(
 	api: OpenClawPluginApi,
@@ -32,6 +34,11 @@ export function registerProfileTool(
 				_toolCallId: string,
 				params: { query?: string; containerTag?: string },
 			) {
+				// Sanitize query in case agent passes raw message with metadata
+				if (params.query) {
+					params.query = stripRuntimeContext(stripInboundMetadata(params.query)).trim() || undefined
+				}
+
 				log.debug(
 					`profile tool: query="${params.query ?? "(none)"}" containerTag="${params.containerTag ?? "default"}"`,
 				)
