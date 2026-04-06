@@ -159,13 +159,22 @@ export function buildPromptSection(params: {
 		if (params.contextEngineActive) {
 			lines.push(
 				"### Memory search",
-				"Relevant memories and your user profile are automatically injected into context each turn by the context engine. Use supermemory_search only for deeper or more specific queries — e.g. when you need more results, a specific time range, or a targeted container.",
+				"Relevant memories and your user profile are automatically injected into context each turn by the context engine.",
+				"",
+				"**IMPORTANT — Read injected context first:**",
+"Before calling any search tool, read the auto-injected profile and memory context above. If the answer is already there, respond directly — do not search to verify what the context engine already provided.",
+				"",
+				"**Trust the profile for simple facts:**",
+				"The user profile (name, preferences, identity, tools, projects) is authoritative. If the profile answers the question, use it directly without searching. Only search when you need details, history, or context beyond what the profile provides.",
+				"",
+				"**Decision rule:** Injected context answers the question → respond directly. Injected context is insufficient or stale → then search.",
 				"",
 				"**When to search explicitly:**",
 				"- The auto-injected context doesn't cover what you need",
 				"- You need results from a specific time range (use `after`/`before`)",
 				"- You want to search a specific container (use `containerTag`)",
 				"- You need deep chunk-level search (use `mode: 'deep'`)",
+				"- The question is about something not in the profile or recent context",
 				"",
 			)
 		} else {
