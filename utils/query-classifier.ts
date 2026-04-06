@@ -1,6 +1,6 @@
 import type { CustomContainer } from "../config.ts"
 
-export type QueryComplexity = "simple" | "knowledge" | "multihop"
+export type QueryComplexity = "simple" | "followup" | "knowledge" | "multihop"
 
 export type QueryClassification = {
 	complexity: QueryComplexity
@@ -13,6 +13,13 @@ export type QueryClassification = {
 const SIMPLE_PATTERNS = [
 	/^(hi|hey|hello|yo|sup|thanks|thank you|ok|okay|yes|no|sure|yep|nope|got it|cool|nice|great|perfect|done|bye|goodbye)\b/i,
 	/^(what time|what day|what date)\b/i,
+]
+
+/** Follow-up patterns — short continuations that reference current context. */
+const FOLLOWUP_PATTERNS = [
+	/^(tell me more|go on|continue|elaborate|explain more|keep going|more details|and\??|what else|anything else)\b/i,
+	/^(what about|how about|and the|also the|same for)\b/i,
+	/^(why|how)\??$/i,
 ]
 
 const MULTIHOP_PATTERNS = [
@@ -198,6 +205,15 @@ export function classifyQuery(
 	for (const pattern of SIMPLE_PATTERNS) {
 		if (pattern.test(trimmed)) {
 			return { complexity: "simple" }
+		}
+	}
+
+	// Follow-up: short continuations of the current topic
+	if (trimmed.length < 30) {
+		for (const pattern of FOLLOWUP_PATTERNS) {
+			if (pattern.test(trimmed)) {
+				return { complexity: "followup" }
+			}
 		}
 	}
 

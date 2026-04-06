@@ -12,6 +12,7 @@ import { buildCompactHandler } from "./compact.ts"
 import { buildAfterTurnHandler } from "./after-turn.ts"
 import { buildMaintainHandler } from "./maintain.ts"
 import { buildOnSubagentEndedHandler } from "./subagent.ts"
+import { SearchCache } from "../utils/search-cache.ts"
 
 /**
  * Build the Supermemory context engine.
@@ -23,7 +24,7 @@ export function buildContextEngine(
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
 	logger: { info: (msg: string) => void },
-): ContextEngine {
+): ContextEngine & { onMutation: () => void } {
 	// Shared state across all lifecycle methods
 	const tracker = new IngestionTracker()
 	const outageBuffer = new OutageBuffer()
@@ -31,6 +32,7 @@ export function buildContextEngine(
 	const turnCount = { value: 0 }
 	const compactionRecommended = { value: false }
 	const lastAssembledMemories = { value: [] as string[] }
+	const searchCache = new SearchCache()
 
 	// Health probe — check SM connectivity at creation time
 	client
@@ -59,7 +61,7 @@ export function buildContextEngine(
 	// trimOffset: compact writes how many messages to skip, assemble consumes it
 	const trimOffset = { value: 0 }
 
-	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories)
+	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories, searchCache)
 	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
 		turnCount,
@@ -86,13 +88,20 @@ export function buildContextEngine(
 		maintain: maintainHandler,
 		onSubagentEnded: onSubagentEndedHandler,
 
+		/** Clear all caches (called by tools on mutation). */
+		onMutation() {
+			clearProfileCache()
+			searchCache.clear()
+			log.debug("CE: caches cleared (mutation detected)")
+		},
+
 		async dispose() {
-			// Flush any pending outage buffer entries
 			if (!outageBuffer.isEmpty()) {
 				log.info(`supermemory CE dispose: ${outageBuffer.pending()} buffered entries will be lost`)
 			}
 			outageBuffer.clear()
 			tracker.clear()
+			searchCache.clear()
 			clearProfileCache()
 			log.info("supermemory CE: disposed")
 		},

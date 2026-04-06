@@ -13,6 +13,7 @@ import { estimateTokens, estimateMessagesTokens } from "../utils/token-estimatio
 import { classifyQuery, type QueryClassification } from "../utils/query-classifier.ts"
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 import { stripInboundMetadata } from "../memory.ts"
+import type { SearchCache } from "../utils/search-cache.ts"
 
 /** SM status page for outage warnings */
 const SM_STATUS_URL = "https://status.supermemory.ai/"
@@ -20,6 +21,7 @@ const SM_STATUS_URL = "https://status.supermemory.ai/"
 /** Adaptive budget ratios by query complexity. */
 const BUDGET_RATIOS = {
 	simple:    { profile: 0.05, memory: 0.10, recent: 0.85 },
+	followup:  { profile: 0.05, memory: 0.05, recent: 0.90 },
 	knowledge: { profile: 0.20, memory: 0.50, recent: 0.30 },
 	multihop:  { profile: 0.15, memory: 0.45, recent: 0.40 },
 } as const
@@ -40,6 +42,7 @@ export function buildAssembleHandler(
 	degradedMode: { value: boolean },
 	trimOffset: { value: number },
 	lastAssembledMemories?: { value: string[] },
+	searchCache?: SearchCache,
 ) {
 	return async (params: {
 		sessionId: string
@@ -138,8 +141,11 @@ export function buildAssembleHandler(
 
 			// ── Zone 2: Retrieved Memories (as messages) ──
 			const memoryMessages: AgentMessage[] = []
-			// Skip Zone 2 for simple queries — saves ~200ms latency + avoids irrelevant results
-			if (classification.complexity !== "simple") {
+			// Skip Zone 2 for simple queries and follow-ups
+			if (classification.complexity === "followup") {
+				log.debug("CE assemble: follow-up detected, skipping Zone 2")
+			}
+			if (classification.complexity !== "simple" && classification.complexity !== "followup") {
 				try {
 					if (queryText && queryText.length >= 3) {
 						// Build temporal filters from classifier
@@ -154,34 +160,42 @@ export function buildAssembleHandler(
 							...(temporalFilters && { filters: temporalFilters }),
 						}
 
-						// Container-aware dual search when classifier detects a topic
+						// Check search cache first (assemble Zone 2 only)
+						const cachedResults = searchCache?.get(queryText, classification.containerHint)
 						let results: SearchResult[]
-						const rootTag = client.getContainerTag()
-						if (
-							classification.containerHint &&
-							cfg.enableCustomContainerTags &&
-							classification.containerHint !== rootTag
-						) {
-							log.debug(`CE assemble: dual search — root + ${classification.containerHint}`)
-							const [rootResults, topicResults] = await Promise.all([
-								client.search(queryText, 10, rootTag, searchOpts),
-								client.search(queryText, 10, classification.containerHint, searchOpts),
-							])
-							// Merge: topic results first (more specific), then root, dedupe by ID
-							const seen = new Set<string>()
-							const merged: SearchResult[] = []
-							for (const r of [...topicResults, ...rootResults]) {
-								if (!seen.has(r.id)) {
-									seen.add(r.id)
-									merged.push(r)
-								}
-							}
-							// Sort by relevance (rerank=true)
-							results = merged
-								.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
-								.slice(0, 10)
+
+						if (cachedResults) {
+							log.debug(`CE assemble: search cache hit (${cachedResults.length} results)`)
+							results = cachedResults
 						} else {
-							results = await client.search(queryText, 10, undefined, searchOpts)
+							// Container-aware dual search when classifier detects a topic
+							const rootTag = client.getContainerTag()
+							if (
+								classification.containerHint &&
+								cfg.enableCustomContainerTags &&
+								classification.containerHint !== rootTag
+							) {
+								log.debug(`CE assemble: dual search — root + ${classification.containerHint}`)
+								const [rootResults, topicResults] = await Promise.all([
+									client.search(queryText, 10, rootTag, searchOpts),
+									client.search(queryText, 10, classification.containerHint, searchOpts),
+								])
+								const seen = new Set<string>()
+								const merged: SearchResult[] = []
+								for (const r of [...topicResults, ...rootResults]) {
+									if (!seen.has(r.id)) {
+										seen.add(r.id)
+										merged.push(r)
+									}
+								}
+								results = merged
+									.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+									.slice(0, 10)
+							} else {
+								results = await client.search(queryText, 10, undefined, searchOpts)
+							}
+							// Store in cache for future turns
+							searchCache?.set(queryText, results, classification.containerHint)
 						}
 
 					if (results.length > 0) {
