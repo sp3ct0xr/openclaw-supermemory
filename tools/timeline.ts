@@ -3,6 +3,8 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import { type SupermemoryClient, buildTemporalFilters } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 function formatDate(iso: string | undefined | null): string {
 	if (!iso) return "unknown date"
@@ -62,6 +64,14 @@ export function registerTimelineTool(
 				},
 			) {
 				// Clamp limit to valid integer range (handles 0, negative, non-integer)
+				// Sanitize topic in case agent passes raw message with metadata
+				params.topic = stripRuntimeContext(stripInboundMetadata(params.topic)).trim()
+				if (!params.topic) {
+					return {
+						content: [{ type: "text" as const, text: "Topic was empty after removing metadata. Provide a specific topic." }],
+					}
+				}
+
 				const rawLimit = typeof params.limit === "number" && Number.isFinite(params.limit)
 					? params.limit
 					: 10

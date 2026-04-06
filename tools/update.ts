@@ -3,6 +3,8 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 /** Extract a sortable timestamp from a search result. */
 function getResultTimestamp(r: { metadata?: Record<string, unknown> }): number {
@@ -84,6 +86,13 @@ export function registerUpdateTool(
 				let targetContent: string | undefined
 
 				if (!targetId && params.query) {
+					// Sanitize query in case agent passes raw message with metadata
+					params.query = stripRuntimeContext(stripInboundMetadata(params.query)).trim()
+					if (!params.query) {
+						return {
+							content: [{ type: "text" as const, text: "Query was empty after removing metadata. Provide a memoryId or a specific query." }],
+						}
+					}
 					log.debug(
 						`update tool: searching for memory matching query="${params.query}"`,
 					)
@@ -136,6 +145,14 @@ export function registerUpdateTool(
 								text: "Provide a query or memoryId to identify the memory to update.",
 							},
 						],
+					}
+				}
+
+				// Security: strip runtime context from stored content
+				params.newContent = stripRuntimeContext(params.newContent).trim()
+				if (!params.newContent) {
+					return {
+						content: [{ type: "text" as const, text: "New content was empty after removing runtime metadata." }],
 					}
 				}
 

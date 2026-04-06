@@ -8,6 +8,8 @@ import {
 } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 const MS_PER_DAY = 86_400_000
 
@@ -167,6 +169,14 @@ export function registerSearchTool(
 					containerTag?: string
 				},
 			) {
+				// Safety: strip runtime context + inbound metadata if agent passes raw message as query
+				params.query = stripRuntimeContext(stripInboundMetadata(params.query)).trim()
+				if (!params.query) {
+					return {
+						content: [{ type: "text" as const, text: "Empty query after sanitization." }],
+					}
+				}
+
 				const mode = params.mode === "deep" ? "deep" : "fast"
 				const limit = params.limit ?? 5
 				const filters = buildTemporalFilters({

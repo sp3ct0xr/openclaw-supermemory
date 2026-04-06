@@ -3,6 +3,8 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
+import { stripInboundMetadata } from "../memory.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 export function registerForgetTool(
 	api: OpenClawPluginApi,
@@ -59,6 +61,13 @@ export function registerForgetTool(
 				}
 
 				if (params.query) {
+					// Sanitize query in case agent passes raw message with metadata
+					params.query = stripRuntimeContext(stripInboundMetadata(params.query)).trim()
+					if (!params.query) {
+						return {
+							content: [{ type: "text" as const, text: "Query was empty after removing metadata. Provide a memoryId or a specific query." }],
+						}
+					}
 					log.debug(
 						`forget tool: search-then-delete query="${params.query}" reason="${params.reason ?? "none"}" containerTag="${params.containerTag ?? "default"}"`,
 					)
