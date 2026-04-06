@@ -20,7 +20,6 @@ const FORGET_MIN_THRESHOLD = 0.75
 /** Safety cap on pagination loops in wipeAllMemories */
 const MAX_WIPE_PAGES = 100
 import {
-	CATEGORY_CONTAINER_SUFFIX,
 	type MemoryCategory,
 	clampEntityContext,
 } from "./memory.ts"
@@ -201,33 +200,6 @@ export class SupermemoryClient {
 		log.info(`initialized (container: ${containerTag})`)
 	}
 
-	/**
-	 * Resolve a container tag based on memory category.
-	 * When `routingEnabled` is true and a category has a suffix,
-	 * returns `{base}_{suffix}`. Otherwise returns the base tag.
-	 */
-	resolveContainerTag(
-		category?: MemoryCategory,
-		explicitTag?: string,
-		routingEnabled = false,
-	): string {
-		if (explicitTag) return explicitTag
-		if (!routingEnabled || !category) return this.containerTag
-		const suffix = CATEGORY_CONTAINER_SUFFIX[category]
-		return suffix ? `${this.containerTag}_${suffix}` : this.containerTag
-	}
-
-	/**
-	 * Return all category container tags (for cross-container search).
-	 * Only meaningful when category routing is enabled.
-	 */
-	getCategoryContainerTags(): string[] {
-		const tags = new Set<string>([this.containerTag])
-		for (const suffix of Object.values(CATEGORY_CONTAINER_SUFFIX)) {
-			if (suffix) tags.add(`${this.containerTag}_${suffix}`)
-		}
-		return [...tags]
-	}
 
 	async addMemory(
 		content: string,

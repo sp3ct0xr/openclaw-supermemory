@@ -9,17 +9,6 @@ export const MEMORY_CATEGORIES = [
 ] as const
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number]
 
-/** Map categories to container suffixes for routed storage. */
-export const CATEGORY_CONTAINER_SUFFIX: Record<MemoryCategory, string> = {
-	preference: "preferences",
-	fact: "facts",
-	decision: "decisions",
-	entity: "entities",
-	correction: "corrections",
-	confirmation: "confirmations",
-	other: "", // default container, no suffix
-}
-
 export function detectCategory(text: string): MemoryCategory {
 	const lower = text.toLowerCase()
 	// Corrections: explicit user corrections ("no, actually", "that's wrong", "not X, use Y")

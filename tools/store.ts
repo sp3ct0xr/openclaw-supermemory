@@ -69,12 +69,7 @@ export function registerStoreTool(
 				const customId = sk ? buildDocumentId(sk) : undefined
 				const now = new Date().toISOString()
 
-				// Resolve container based on category routing
-				const routedTag = client.resolveContainerTag(
-					category,
-					params.containerTag,
-					cfg.categoryRouting,
-				)
+				const routedTag = params.containerTag ?? undefined
 
 				// Auto-detect direct mode: short explicit facts (preference/fact/entity) use v4 direct
 				const useDirect = params.direct ?? (

@@ -157,6 +157,7 @@ export function buildPromptSection(params: {
 			"",
 			"**Temporal filters:** Use `after` and `before` (ISO dates) to scope search to a time range (e.g. 'what did the user say last week').",
 			"**Reranking:** Use `rerank: true` for better result ordering (+~100ms). Default: false for fast, true for deep.",
+			"**Query expansion:** Use `rewriteQuery: true` to expand short or ambiguous queries (e.g. 'auth' → 'authentication login oauth'). Adds ~50ms. Useful when fast mode returns too few results.",
 			"",
 			"### Trusting recalled memories",
 			"Memories reflect what was true *when stored*. Treat each result as a historical snapshot, not live state.",
@@ -172,6 +173,7 @@ export function buildPromptSection(params: {
 			"",
 			"**Atomic facts**: Store ONE fact per call. Instead of \"User likes dark mode and uses pnpm\", make two separate calls.",
 			"**Categories**: The tool auto-detects category (preference/fact/decision/entity/correction/confirmation) but you can override. Corrections are HIGH priority — they replace outdated information. Confirmations reinforce validated approaches.",
+			"**Direct mode**: Use `direct: true` for explicit facts the user states directly — bypasses the document pipeline for instant searchability. Auto-detected for short preference/fact/entity text when omitted. Falls back to pipeline if v4 fails.",
 			"**Deduplication**: The store automatically checks for similar existing memories. If a near-duplicate exists, it updates the existing memory instead of creating a new one.",
 			"",
 		)
@@ -231,6 +233,16 @@ export function buildPromptSection(params: {
 			"Use supermemory_documents to **manage** already-ingested documents (inspect, browse, update, delete). For adding new content, prefer supermemory_ingest instead.",
 			"",
 			"**Actions:** `action: 'get'` + `documentId` to inspect. `action: 'list'` to browse with `sort`/`order`/`page`/`limit`/`containerTag`. `action: 'processing'` to see pipeline status. `action: 'update'` + `documentId` + `content` to update. `action: 'upload'` + `filePath` to upload a local file directly (use only when you need explicit fileType/mimeType override — otherwise use supermemory_ingest). `action: 'delete'` + `documentId` to remove.",
+			"",
+		)
+	}
+	if (params.availableTools.has("supermemory_timeline")) {
+		lines.push(
+			"### Memory timeline",
+			"Use supermemory_timeline to see how knowledge about a topic evolved over time. Results are sorted chronologically and grouped by date.",
+			"",
+			"**When to use:** When the user asks 'what happened with X over time', 'history of Y', or wants to trace how a decision or preference changed.",
+			"**Params:** `topic` (required), optional `after`/`before` (ISO dates), `limit` (default: 10, max: 30), `containerTag`.",
 			"",
 		)
 	}
