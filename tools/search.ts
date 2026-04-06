@@ -108,6 +108,12 @@ export function registerSearchTool(
 							"Re-score results with cross-encoder for better ranking (+~100ms). Default: false for fast, true for deep.",
 					}),
 				),
+				rewriteQuery: Type.Optional(
+					Type.Boolean({
+						description:
+							"Expand query for better recall (e.g., 'auth' → 'authentication login oauth'). Useful for short or ambiguous queries.",
+					}),
+				),
 				containerTag: Type.Optional(
 					Type.String({
 						description:
@@ -124,6 +130,7 @@ export function registerSearchTool(
 					after?: string
 					before?: string
 					rerank?: boolean
+					rewriteQuery?: boolean
 					containerTag?: string
 				},
 			) {
@@ -145,6 +152,7 @@ export function registerSearchTool(
 						{
 							limit,
 							rerank: params.rerank ?? true,
+							...(params.rewriteQuery !== undefined && { rewriteQuery: params.rewriteQuery }),
 							...(filters && { filters }),
 							...(params.containerTag && {
 								containerTag: params.containerTag,
@@ -196,6 +204,7 @@ export function registerSearchTool(
 
 				const searchOpts = {
 					...(params.rerank !== undefined && { rerank: params.rerank }),
+					...(params.rewriteQuery !== undefined && { rewriteQuery: params.rewriteQuery }),
 					searchMode: "hybrid" as const,
 					...(filters && { filters }),
 				}

@@ -232,6 +232,8 @@ export class SupermemoryClient {
 		customId?: string,
 		containerTag?: string,
 		entityContext?: string,
+		/** SM v4 isStatic: true = permanent identity trait (never auto-forgotten) */
+		isStatic?: boolean,
 	): Promise<{ id: string }> {
 		const cleaned = sanitizeContent(content)
 		const tag = containerTag ?? this.containerTag
@@ -253,6 +255,7 @@ export class SupermemoryClient {
 			...(metadata && { metadata }),
 			...(customId && { customId }),
 			...(clampedCtx && { entityContext: clampedCtx }),
+			...(isStatic !== undefined && { isStatic }),
 		})
 
 		log.debugResponse("add", { id: result.id })
@@ -647,6 +650,8 @@ export class SupermemoryClient {
 	async addOrUpdateMemory(params: {
 		content: string
 		category?: MemoryCategory
+		/** SM v4 isStatic: true = permanent identity trait, false = dynamic fact */
+		isStatic?: boolean
 		metadata?: Record<string, string | number | boolean>
 		customId?: string
 		containerTag?: string
@@ -700,6 +705,7 @@ export class SupermemoryClient {
 			params.customId,
 			tag,
 			params.entityContext,
+			params.isStatic,
 		)
 		return { id: result.id, action: "created" }
 	}

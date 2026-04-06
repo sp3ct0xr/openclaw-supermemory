@@ -1,8 +1,18 @@
-import type { ProfileSearchResult, SupermemoryClient } from "../client.ts"
+import type { ProfileResult, ProfileSearchResult, SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
 import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../utils/text-similarity.ts"
+
+// ── Profile cache with TTL (P1 item #2) ──
+const DEFAULT_PROFILE_TTL_MS = 60_000 // 60s
+type ProfileCacheEntry = { data: ProfileResult; expiresAt: number }
+let profileCacheEntry: ProfileCacheEntry | null = null
+
+/** Clear the profile cache (for testing or session reset). */
+export function clearProfileCache(): void {
+	profileCacheEntry = null
+}
 
 function formatRelativeTime(isoTimestamp: string): string {
 	try {
@@ -212,9 +222,19 @@ export function buildRecallHandler(
 		)
 
 		try {
-			const profile = await client.getProfile(
-				isNewSession ? undefined : query,
-			)
+			// Profile cache with TTL — avoid redundant SM API calls (P1 item #2)
+			const now = Date.now()
+			const ttl = cfg.profileCacheTtlMs ?? DEFAULT_PROFILE_TTL_MS
+			let profile: ProfileResult
+			if (profileCacheEntry && profileCacheEntry.expiresAt > now && !isNewSession) {
+				profile = profileCacheEntry.data
+				log.debug("recall: using cached profile")
+			} else {
+				profile = await client.getProfile(
+					isNewSession ? undefined : query,
+				)
+				profileCacheEntry = { data: profile, expiresAt: now + ttl }
+			}
 
 			const memoryContext = formatContext(
 				includeProfile ? profile.static : [],

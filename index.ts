@@ -128,6 +128,19 @@ export default {
 			)
 		}
 
+		// Flush SM buffer before compaction strips context (P1 item #1)
+		// Prevents data loss when compaction fires before agent_end
+		api.on("PreCompact", async () => {
+			if (sessionBuffer.pending() > 0) {
+				api.logger.info(`supermemory: PreCompact — flushing ${sessionBuffer.pending()} pending turns`)
+				try {
+					await sessionBuffer.flush()
+				} catch (err) {
+					api.logger.error("supermemory: PreCompact flush failed", err)
+				}
+			}
+		})
+
 		registerCommands(api, client, cfg, getSessionKey)
 		registerCli(api, client, cfg)
 
