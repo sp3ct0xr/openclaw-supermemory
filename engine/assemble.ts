@@ -32,6 +32,7 @@ export function buildAssembleHandler(
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
 	degradedMode: { value: boolean },
+	trimOffset: { value: number },
 ) {
 	return async (params: {
 		sessionId: string
@@ -148,8 +149,17 @@ export function buildAssembleHandler(
 			}
 
 			// ── Zone 3: Recent Messages ──
+			// Apply trimOffset from compact() — skip already-ingested older messages
+			const effectiveMessages = trimOffset.value > 0
+				? params.messages.slice(trimOffset.value)
+				: params.messages
+			if (trimOffset.value > 0) {
+				log.debug(`CE assemble: applying trimOffset=${trimOffset.value} from compact`)
+				trimOffset.value = 0
+			}
+
 			const recentMessages = trimMessagesToBudget(
-				params.messages,
+				effectiveMessages,
 				recentBudget,
 			)
 

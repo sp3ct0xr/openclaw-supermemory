@@ -20,6 +20,7 @@ import { estimateMessagesTokens } from "../utils/token-estimation.ts"
 export function buildCompactHandler(
 	cfg: SupermemoryConfig,
 	tracker: IngestionTracker,
+	trimOffset: { value: number },
 ) {
 	return async (params: {
 		sessionId: string
@@ -78,8 +79,8 @@ export function buildCompactHandler(
 				}
 			}
 
-			// Trimming is done by returning fewer messages in the next assemble() call
-			// The compact() return signals to the runtime what happened
+			// Store trim offset — assemble() will consume this on next call
+			trimOffset.value = trimCount
 			const tokensAfter = estimateMessagesTokens(messages.slice(trimCount))
 
 			log.info(`CE compact: trimmed ${trimCount} messages (${tokensBefore} → ${tokensAfter} tokens)`)

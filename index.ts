@@ -114,25 +114,25 @@ export default {
 				)
 		}
 
-	// CE handles context assembly → skip autoRecall when CE is active
-	if (cfg.autoRecall && !cfg.contextEngine) {
-		const recallHandler = buildRecallHandler(client, cfg)
-		api.on(
-			"before_prompt_build",
-			(event: Record<string, unknown>, ctx: Record<string, unknown>) => {
-				if (ctx.sessionKey) sessionKey = ctx.sessionKey as string
-				return recallHandler(event, ctx)
-			},
-		)
-	}
+		// CE handles context assembly → skip autoRecall when CE is active
+		if (cfg.autoRecall && !cfg.contextEngine) {
+			const recallHandler = buildRecallHandler(client, cfg)
+			api.on(
+				"before_prompt_build",
+				(event: Record<string, unknown>, ctx: Record<string, unknown>) => {
+					if (ctx.sessionKey) sessionKey = ctx.sessionKey as string
+					return recallHandler(event, ctx)
+				},
+			)
+		}
 
-	// CE handles ingestion → skip autoCapture when CE is active
-	if (cfg.autoCapture && !cfg.contextEngine) {
-		api.on(
-			"agent_end",
-			buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
-		)
-	}
+		// CE handles ingestion → skip autoCapture when CE is active
+		if (cfg.autoCapture && !cfg.contextEngine) {
+			api.on(
+				"agent_end",
+				buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
+			)
+		}
 
 		// SessionStart: warm profile cache (P2 item #11)
 		api.on("SessionStart", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {

@@ -51,8 +51,11 @@ export function buildContextEngine(
 		outageBuffer,
 		degradedMode,
 	)
-	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode)
-	const compactHandler = buildCompactHandler(cfg, tracker)
+	// trimOffset: compact writes how many messages to skip, assemble consumes it
+	const trimOffset = { value: 0 }
+
+	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset)
+	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler)
 
 	return {
