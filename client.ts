@@ -10,6 +10,15 @@ import {
 } from "./lib/validate.js"
 import { log } from "./logger.ts"
 import { textSimilarity, DEDUP_SIMILARITY_THRESHOLD } from "./utils/text-similarity.ts"
+
+// ── Threshold constants (battle-tested in PRs #12-14) ──
+
+/** Minimum similarity for batch-delete in forgetByQuery */
+const FORGET_HIGH_THRESHOLD = 0.80
+/** Minimum similarity for single fallback delete in forgetByQuery */
+const FORGET_MIN_THRESHOLD = 0.75
+/** Safety cap on pagination loops in wipeAllMemories */
+const MAX_WIPE_PAGES = 100
 import {
 	CATEGORY_CONTAINER_SUFFIX,
 	type MemoryCategory,
@@ -290,6 +299,8 @@ export class SupermemoryClient {
 			...(opts?.rewriteQuery !== undefined && { rewriteQuery: opts.rewriteQuery }),
 			...(opts?.searchMode && { searchMode: opts.searchMode }),
 			...(opts?.threshold !== undefined && { threshold: opts.threshold }),
+			// SDK filter types are deeply nested recursive unions per endpoint
+			// (SearchMemoriesParams.Or | .And) with no shared export — as any is unavoidable.
 			...(opts?.filters && { filters: opts.filters as any }),
 			...(opts?.include && { include: opts.include }),
 		})
@@ -336,6 +347,7 @@ export class SupermemoryClient {
 			rerank: opts?.rerank ?? true,
 			...(opts?.rewriteQuery !== undefined && { rewriteQuery: opts.rewriteQuery }),
 			...(opts?.containerTag && { containerTag: opts.containerTag }),
+			// SDK filter types: see comment in search() above
 			...(opts?.filters && { filters: opts.filters as any }),
 		})
 
@@ -377,6 +389,7 @@ export class SupermemoryClient {
 			containerTag: tag,
 			...(query && { q: query }),
 			...(opts?.threshold !== undefined && { threshold: opts.threshold }),
+			// SDK filter types: see comment in search() above
 			...(opts?.filters && { filters: opts.filters as any }),
 		})
 
@@ -486,37 +499,41 @@ export class SupermemoryClient {
 			return { success: false, message: "No matching memory found to forget." }
 		}
 
-		const HIGH_THRESHOLD = 0.80
 		const highConfidence = results.filter(
-			(r) => r.similarity !== undefined && r.similarity >= HIGH_THRESHOLD,
+			(r) => r.similarity !== undefined && r.similarity >= FORGET_HIGH_THRESHOLD,
 		)
 
 		if (highConfidence.length > 0) {
-			// Delete all high-confidence matches
-			for (const target of highConfidence) {
-				await this.deleteMemory(target.id, containerTag)
+			// Delete all high-confidence matches in parallel
+			const settled = await Promise.allSettled(
+				highConfidence.map((target) => this.deleteMemory(target.id, containerTag)),
+			)
+			const succeeded = settled.filter((r) => r.status === "fulfilled").length
+			const failed = settled.filter((r) => r.status === "rejected").length
+			if (failed > 0) {
+				log.warn(`forgetByQuery: ${failed}/${settled.length} deletes failed`)
 			}
 			const previews = highConfidence
 				.map((r) => `"${limitText(r.content || r.memory || "", 60)}"`)
 				.join(", ")
+			const suffix = failed > 0 ? ` (${failed} failed)` : ""
 			return {
-				success: true,
-				message: `Forgot ${highConfidence.length} memor${highConfidence.length === 1 ? "y" : "ies"}: ${previews}`,
+				success: succeeded > 0,
+				message: `Forgot ${succeeded} memor${succeeded === 1 ? "y" : "ies"}: ${previews}${suffix}`,
 			}
 		}
 
 		// No high-confidence match — check minimum threshold before fallback
-		const MIN_THRESHOLD = 0.75
-		if (results[0].similarity !== undefined && results[0].similarity < MIN_THRESHOLD) {
+		const top = results[0]
+		if (!top || (top.similarity !== undefined && top.similarity < FORGET_MIN_THRESHOLD)) {
 			return {
 				success: false,
-				message: `No confident match found. Top result only scored ${Math.round((results[0].similarity || 0) * 100)}%.`,
+				message: `No confident match found. Top result only scored ${Math.round((top?.similarity ?? 0) * 100)}%.`,
 			}
 		}
-		const target = results[0]
-		await this.deleteMemory(target.id, containerTag)
+		await this.deleteMemory(top.id, containerTag)
 
-		const preview = limitText(target.content || target.memory || "", 100)
+		const preview = limitText(top.content || top.memory || "", 100)
 		return { success: true, message: `Forgot: "${preview}"` }
 	}
 
@@ -526,7 +543,7 @@ export class SupermemoryClient {
 		const allIds: string[] = []
 		let page = 1
 
-		while (true) {
+		while (page <= MAX_WIPE_PAGES) {
 			// TODO: SDK v4.21.1 documents.list() only supports deprecated containerTags (array).
 			// Migrate to containerTag (singular) when SDK adds it to DocumentListParams.
 			const response = await this.client.documents.list({
@@ -547,6 +564,10 @@ export class SupermemoryClient {
 			)
 				break
 			page++
+		}
+
+		if (page > MAX_WIPE_PAGES) {
+			log.warn(`wipe: stopped at page ${MAX_WIPE_PAGES} safety cap — wipe may be incomplete (${allIds.length} docs collected so far)`)
 		}
 
 		if (allIds.length === 0) {
@@ -691,10 +712,8 @@ export class SupermemoryClient {
 	}> {
 		log.debugRequest("settings.get", {})
 		const response = await this.client.settings.get()
-		const trunc = (s: string) =>
-			s.length > 50 ? `${s.slice(0, 50)}…` : s
 		log.debugResponse("settings.get", {
-			filterPrompt: response.filterPrompt ? trunc(response.filterPrompt) : null,
+			filterPrompt: response.filterPrompt ? limitText(response.filterPrompt, 50) : null,
 			shouldLLMFilter: response.shouldLLMFilter,
 			chunkSize: response.chunkSize,
 		})
@@ -715,12 +734,10 @@ export class SupermemoryClient {
 		shouldLLMFilter?: boolean | null
 		chunkSize?: number | null
 	}> {
-		const trunc = (s: string) =>
-			s.length > 50 ? `${s.slice(0, 50)}…` : s
 		log.debugRequest("settings.update", {
 			...(params.filterPrompt !== undefined && {
 				filterPrompt: params.filterPrompt
-					? trunc(params.filterPrompt)
+					? limitText(params.filterPrompt, 50)
 					: params.filterPrompt,
 			}),
 			...(params.shouldLLMFilter !== undefined && { shouldLLMFilter: params.shouldLLMFilter }),
@@ -734,7 +751,7 @@ export class SupermemoryClient {
 		log.debugResponse("settings.update", {
 			...(response.updated.filterPrompt !== undefined && {
 				filterPrompt: response.updated.filterPrompt
-					? trunc(response.updated.filterPrompt)
+					? limitText(response.updated.filterPrompt, 50)
 					: response.updated.filterPrompt,
 			}),
 			...(response.updated.shouldLLMFilter !== undefined && {
@@ -923,7 +940,7 @@ export class SupermemoryClient {
 		return {
 			// SDK returns `memories` field from documents.list() — not `documents`.
 			// This is the SDK's naming convention, not a bug.
-			documents: (response.memories ?? []) as unknown as Array<Record<string, unknown>>,
+			documents: (response.memories ?? []).map((m) => ({ ...m })),
 			pagination: {
 				currentPage: response.pagination?.currentPage ?? 1,
 				totalPages: response.pagination?.totalPages ?? 1,

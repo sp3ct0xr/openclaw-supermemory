@@ -74,9 +74,12 @@ function deduplicateMemories(
 		)
 		if (dupeIdx === -1) {
 			fuzzyDeduped.push(fact)
-		} else if (fact.length > fuzzyDeduped[dupeIdx].length) {
-			// Keep the longer/more informative variant
-			fuzzyDeduped[dupeIdx] = fact
+		} else {
+			const existing = fuzzyDeduped[dupeIdx]
+			if (existing && fact.length > existing.length) {
+				// Keep the longer/more informative variant
+				fuzzyDeduped[dupeIdx] = fact
+			}
 		}
 	}
 

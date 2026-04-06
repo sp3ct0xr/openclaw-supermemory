@@ -180,8 +180,13 @@ export function registerDocumentsTool(
 					}
 
 					const lines = docs.map(
-						(d: any, i: number) =>
-							`${i + 1}. [${d.type ?? "?"}] ${d.title ?? d.id} — ${d.status} (${d.createdAt?.slice(0, 10)})`,
+						(d: Record<string, unknown>, i: number) => {
+							const type = typeof d.type === "string" ? d.type : "?"
+							const title = typeof d.title === "string" ? d.title : String(d.id ?? "?")
+							const status = typeof d.status === "string" ? d.status : "?"
+							const date = typeof d.createdAt === "string" ? d.createdAt.slice(0, 10) : "?"
+							return `${i + 1}. [${type}] ${title} — ${status} (${date})`
+						},
 					)
 
 					return {
@@ -194,13 +199,13 @@ export function registerDocumentsTool(
 						details: {
 							count: docs.length,
 							pagination,
-							documents: docs.map((d: any) => ({
-								id: d.id,
-								title: d.title,
-								type: d.type,
-								status: d.status,
-								createdAt: d.createdAt,
-							})),
+						documents: docs.map((d: Record<string, unknown>) => ({
+							id: d.id,
+							title: d.title,
+							type: d.type,
+							status: d.status,
+							createdAt: d.createdAt,
+						})),
 						},
 					}
 				}

@@ -20,7 +20,7 @@ const TEXT_APPLICATION_MIMES = new Set([
 /** Derive Supermemory SDK fileType from a MIME string (e.g. "image/png" → "image"). */
 export function deriveFileType(mimeStr: string): string | undefined {
 	if (mimeStr === "application/pdf") return "pdf"
-	const category = mimeStr.split("/")[0]
+	const category = mimeStr.split("/")[0] ?? ""
 	return ["image", "video", "audio"].includes(category) ? category : undefined
 }
 

@@ -107,7 +107,7 @@ export function stripInboundMetadata(text: string): string {
 	let inFencedJson = false
 
 	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]
+		const line = lines[i] as string
 
 		if (!inMetaBlock && isMetaSentinel(line)) {
 			const next = lines[i + 1]
