@@ -14,6 +14,7 @@ import { classifyQuery, type QueryClassification } from "../utils/query-classifi
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 import { stripInboundMetadata } from "../memory.ts"
 import type { SearchCache } from "../utils/search-cache.ts"
+import type { ResponseCache } from "../utils/response-cache.ts"
 
 /** SM status page for outage warnings */
 const SM_STATUS_URL = "https://status.supermemory.ai/"
@@ -43,6 +44,7 @@ export function buildAssembleHandler(
 	trimOffset: { value: number },
 	lastAssembledMemories?: { value: string[] },
 	searchCache?: SearchCache,
+	responseCache?: ResponseCache,
 ) {
 	return async (params: {
 		sessionId: string
@@ -76,6 +78,16 @@ export function buildAssembleHandler(
 			// Strip runtime context from prompt to avoid searching with internal metadata
 			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
 			const queryText = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() || undefined : undefined
+
+			// ── Response cache: return full cached result for repeated queries ──
+			if (queryText && responseCache) {
+				const cached = responseCache.get(queryText)
+				if (cached) {
+					log.debug(`CE assemble: response cache hit — returning cached result`)
+					return cached
+				}
+			}
+
 			const classification: QueryClassification = classifyQuery(
 				queryText,
 				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
@@ -251,11 +263,18 @@ export function buildAssembleHandler(
 				`CE assemble: ${memoryMessages.length > 0 ? memoryMessages.length : "no"} memory msgs, ${recentMessages.length} recent msgs, ${totalTokens} est. tokens`,
 			)
 
-			return {
+			const result: AssembleResult = {
 				messages: assembled,
 				estimatedTokens: totalTokens,
 				...(profileText && { systemPromptAddition: profileText }),
 			}
+
+			// Cache the assembled result for repeated queries
+			if (queryText && responseCache) {
+				responseCache.set(queryText, result)
+			}
+
+			return result
 		} catch (err) {
 			// SAFETY NET: assemble must never throw
 			log.error("CE assemble: unexpected error, falling back to legacy", err)

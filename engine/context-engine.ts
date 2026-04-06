@@ -13,6 +13,7 @@ import { buildAfterTurnHandler } from "./after-turn.ts"
 import { buildMaintainHandler } from "./maintain.ts"
 import { buildOnSubagentEndedHandler } from "./subagent.ts"
 import { SearchCache } from "../utils/search-cache.ts"
+import { ResponseCache } from "../utils/response-cache.ts"
 
 /**
  * Build the Supermemory context engine.
@@ -25,6 +26,7 @@ export function buildContextEngine(
 	cfg: SupermemoryConfig,
 	logger: { info: (msg: string) => void },
 	externalSearchCache?: SearchCache,
+	externalResponseCache?: ResponseCache,
 ): ContextEngine & { onMutation: () => void } {
 	// Shared state across all lifecycle methods
 	const tracker = new IngestionTracker()
@@ -33,8 +35,9 @@ export function buildContextEngine(
 	const turnCount = { value: 0 }
 	const compactionRecommended = { value: false }
 	const lastAssembledMemories = { value: [] as string[] }
-	// Use external cache (plugin-scope, survives disposal) or create local one
+	// Use external caches (plugin-scope, survive disposal) or create local ones
 	const searchCache = externalSearchCache ?? new SearchCache()
+	const responseCache = externalResponseCache ?? new ResponseCache()
 
 	// Health probe — check SM connectivity at creation time
 	client
@@ -63,7 +66,7 @@ export function buildContextEngine(
 	// trimOffset: compact writes how many messages to skip, assemble consumes it
 	const trimOffset = { value: 0 }
 
-	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories, searchCache)
+	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories, searchCache, responseCache)
 	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
 		turnCount,
@@ -94,6 +97,7 @@ export function buildContextEngine(
 		onMutation() {
 			clearProfileCache()
 			searchCache.clear()
+			responseCache.clear()
 			log.debug("CE: caches cleared (mutation detected)")
 		},
 
@@ -103,8 +107,9 @@ export function buildContextEngine(
 			}
 			outageBuffer.clear()
 			tracker.clear()
-			// Don't clear external search cache on dispose — it lives at plugin scope
+			// Don't clear external caches on dispose — they live at plugin scope
 			if (!externalSearchCache) searchCache.clear()
+			if (!externalResponseCache) responseCache.clear()
 			// Don't clear profile cache on dispose — it lives at module scope
 			log.info("supermemory CE: disposed")
 		},
