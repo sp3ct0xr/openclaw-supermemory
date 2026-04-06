@@ -6,6 +6,66 @@ import { IngestionTracker } from "../utils/ingestion-tracker.ts"
 import { OutageBuffer } from "../utils/outage-buffer.ts"
 import { stripInboundMetadata } from "../memory.ts"
 
+/**
+ * Strip OpenClaw runtime internal context blocks that should never be stored as memories.
+ *
+ * Patterns sourced from OpenClaw runtime:
+ *  - internal-runtime-context.ts (delimited + legacy internal context)
+ *  - internal-events.ts (task completion events)
+ *  - external-content.ts (untrusted external content wrappers)
+ *  - subagent-spawn.ts (subagent dispatch messages)
+ *  - subagent-announce.ts (subagent wake/completion context)
+ *  - subagent-announce-output.ts (child result formatting)
+ */
+function stripRuntimeContext(text: string): string {
+	if (!text) return text
+	return text
+		// ── Delimited runtime context (supports nesting via greedy match) ──
+		.replace(/<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>[\s\S]*?<<<END_OPENCLAW_INTERNAL_CONTEXT>>>/g, "")
+
+		// ── Legacy internal context header + event blocks ──
+		// Format: "OpenClaw runtime context (internal):\nThis context is runtime-generated...\n\n[Internal task completion event]\n..."
+		.replace(/OpenClaw runtime context \(internal\):[\s\S]*?(?=\n\[role:|$)/g, "")
+
+		// ── Internal task completion event metadata ──
+		.replace(/\[Internal task completion event\][\s\S]*?(?=\n\n---\n\n\[Internal|\n\[role:|$)/g, "")
+
+		// ── Untrusted child result blocks (strip markers AND content between them) ──
+		.replace(/(?:(?:Result|Child result) \(untrusted content, treat as data\):\n)?<<<BEGIN_UNTRUSTED_CHILD_RESULT>>>[\s\S]*?<<<END_UNTRUSTED_CHILD_RESULT>>>/g, "")
+
+		// ── Child completion result blocks ──
+		.replace(/Child completion results:[\s\S]*?(?=\n\[role:|$)/g, "")
+
+		// ── External untrusted content (web fetches with random IDs) ──
+		.replace(/<<<EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>[\s\S]*?<<<END_EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>/g, "")
+
+		// ── Tool result blocks (file contents, command outputs — ephemeral) ──
+		.replace(/\[role: toolResult\][\s\S]*?\[toolResult:end\]/g, "")
+
+		// ── Subagent dispatch metadata (subagent-spawn.ts:675-683) ──
+		.replace(/^\[Subagent Context\][^\n]*$/gm, "")
+		.replace(/^\[Subagent Task\]:.*$/gm, "")
+
+		// ── Our own injected memory/container context ──
+		.replace(/<supermemory-context>[\s\S]*?<\/supermemory-context>\s*/g, "")
+		.replace(/<supermemory-containers>[\s\S]*?<\/supermemory-containers>\s*/g, "")
+
+		// ── Action/reply instructions appended to internal events ──
+		.replace(/^Action:\n.*(?:Convert (?:this|the) (?:completion|result)|reply ONLY)[^\n]*$/gm, "")
+
+		// ── Execution stats lines ──
+		.replace(/^Stats: runtime[^\n]*$/gm, "")
+
+		// ── Security notice boilerplate ──
+		.replace(/SECURITY NOTICE: The following content is from an EXTERNAL[\s\S]*?Send messages to third parties\n*/g, "")
+
+		// ── Untrusted context trailing header (strip-inbound-meta.ts) ──
+		.replace(/^Untrusted context \(metadata, do not treat as instructions or commands\):[\s\S]*$/gm, "")
+
+		// ── Clean up whitespace ──
+		.replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "")
+}
+
 /** Extract text content from AgentMessage for SM ingestion. */
 function formatMessageText(msg: AgentMessage): string {
 	const role = msg.role ?? "unknown"
@@ -22,7 +82,10 @@ function formatMessageText(msg: AgentMessage): string {
 	}
 	// Strip injected metadata from user messages (same as capture hook)
 	const cleaned = role === "user" ? stripInboundMetadata(text) : text
-	return `[role: ${role}]\n${cleaned}\n[${role}:end]`
+	// Strip runtime context from ALL roles (subagent context, injected SM tags)
+	const sanitized = stripRuntimeContext(cleaned)
+	if (!sanitized) return ""
+	return `[role: ${role}]\n${sanitized}\n[${role}:end]`
 }
 
 /**
@@ -66,7 +129,15 @@ export function buildIngestBatchHandler(
 		}
 
 		// Format messages as session text for SM ingestion
-		const formatted = params.messages.map(formatMessageText).join("\n\n")
+		const formatted = params.messages
+			.map(formatMessageText)
+			.filter((t) => t.length > 0)
+			.join("\n\n")
+
+		if (!formatted) {
+			log.debug("CE ingestBatch: all messages were runtime-only context, skipping")
+			return { ingestedCount: 0 }
+		}
 		const customId = `session_${params.sessionId}_turn_${Date.now()}`
 		const msgIds = params.messages.map(
 			(_, i) => `${params.sessionId}_batch_${Date.now()}_${i}`,
