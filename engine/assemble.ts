@@ -11,6 +11,7 @@ import {
 } from "../hooks/recall.ts"
 import { estimateTokens, estimateMessagesTokens } from "../utils/token-estimation.ts"
 import { classifyQuery, type QueryClassification } from "../utils/query-classifier.ts"
+import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 
 /** SM status page for outage warnings */
 const SM_STATUS_URL = "https://status.supermemory.ai/"
@@ -67,7 +68,9 @@ export function buildAssembleHandler(
 			}
 
 			// ── Classify query for adaptive budget + temporal/container hints ──
-			const queryText = params.prompt ?? extractLastUserQuery(params.messages)
+			// Strip runtime context from prompt to avoid searching with internal metadata
+			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
+			const queryText = rawQuery ? stripRuntimeContext(rawQuery) : undefined
 			const classification: QueryClassification = classifyQuery(
 				queryText,
 				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
@@ -90,7 +93,7 @@ export function buildAssembleHandler(
 			try {
 				let profile = getProfileCache()
 				if (!profile) {
-					profile = await client.getProfile(params.prompt)
+					profile = await client.getProfile(queryText)
 					setProfileCache(profile, cfg.profileCacheTtlMs)
 				}
 
