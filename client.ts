@@ -181,6 +181,7 @@ function deduplicateStrings(items: string[]): string[] {
 export class SupermemoryClient {
 	private client: Supermemory
 	private containerTag: string
+	private apiKey: string
 
 	constructor(apiKey: string, containerTag: string) {
 		const keyCheck = validateApiKeyFormat(apiKey)
@@ -195,6 +196,7 @@ export class SupermemoryClient {
 
 		this.client = new Supermemory({ apiKey })
 		this.containerTag = containerTag
+		this.apiKey = apiKey
 		log.info(`initialized (container: ${containerTag})`)
 	}
 
@@ -708,6 +710,61 @@ export class SupermemoryClient {
 			params.isStatic,
 		)
 		return { id: result.id, action: "created" }
+	}
+
+	/** Create memories directly via SM v4 API (bypasses document pipeline).
+	 *  Memories are immediately searchable. Use for explicit user-stated facts. */
+	async createMemoryDirect(params: {
+		content: string
+		containerTag?: string
+		isStatic?: boolean
+		metadata?: Record<string, string | number | boolean>
+		temporalContext?: { documentDate?: string; eventDate?: string[] }
+		forgetAfter?: string
+		forgetReason?: string
+	}): Promise<{ id: string; memory: string; isStatic: boolean; createdAt: string }> {
+		const tag = params.containerTag ?? this.containerTag
+
+		log.debugRequest("v4.memories.create", {
+			contentLength: params.content.length,
+			containerTag: tag,
+			isStatic: params.isStatic,
+		})
+
+		const response = await fetch("https://api.supermemory.ai/v4/memories", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${this.apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				memories: [{
+					content: params.content,
+					isStatic: params.isStatic ?? false,
+					...(params.metadata && { metadata: params.metadata }),
+					...(params.temporalContext && { temporalContext: params.temporalContext }),
+					...(params.forgetAfter && { forgetAfter: params.forgetAfter }),
+					...(params.forgetReason && { forgetReason: params.forgetReason }),
+				}],
+				containerTag: tag,
+			}),
+		})
+
+		if (!response.ok) {
+			const text = await response.text().catch(() => "")
+			throw new Error(`SM v4 create memory failed (${response.status}): ${text.slice(0, 200)}`)
+		}
+
+		const data = await response.json() as {
+			documentId: string
+			memories: Array<{ id: string; memory: string; isStatic: boolean; createdAt: string }>
+		}
+
+		const mem = data.memories[0]
+		if (!mem) throw new Error("SM v4 create memory returned empty memories array")
+
+		log.debugResponse("v4.memories.create", { id: mem.id, isStatic: mem.isStatic })
+		return mem
 	}
 
 	/** Get org-level Supermemory settings. */
