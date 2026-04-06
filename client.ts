@@ -1,15 +1,15 @@
 import fs from "node:fs"
 import path from "node:path"
 import Supermemory, { toFile } from "supermemory"
-import { isAllowedPath } from "./path-guard.ts"
-import { deriveFileType, lookupMime } from "./mime-utils.ts"
+import { isAllowedPath } from "./utils/path-guard.ts"
+import { deriveFileType, lookupMime } from "./utils/mime-utils.ts"
 import {
 	sanitizeContent,
 	validateApiKeyFormat,
 	validateContainerTag,
 } from "./lib/validate.js"
 import { log } from "./logger.ts"
-import { textSimilarity, DEDUP_SIMILARITY_THRESHOLD } from "./text-similarity.ts"
+import { textSimilarity, DEDUP_SIMILARITY_THRESHOLD } from "./utils/text-similarity.ts"
 import {
 	CATEGORY_CONTAINER_SUFFIX,
 	type MemoryCategory,

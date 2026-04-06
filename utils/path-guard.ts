@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
-import { log } from "./logger.ts"
+import { log } from "../logger.ts"
 
 let workspaceDir: string | undefined
 let allowedDirs: string[] = []

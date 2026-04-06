@@ -2,7 +2,7 @@ import type { ProfileSearchResult, SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
-import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../text-similarity.ts"
+import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../utils/text-similarity.ts"
 
 function formatRelativeTime(isoTimestamp: string): string {
 	try {

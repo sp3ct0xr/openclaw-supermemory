@@ -4,7 +4,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
-import { isAllowedPath } from "../path-guard.ts"
+import { isAllowedPath } from "../utils/path-guard.ts"
 
 export function registerDocumentsTool(
 	api: OpenClawPluginApi,

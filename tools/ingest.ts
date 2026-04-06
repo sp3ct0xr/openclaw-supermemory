@@ -4,9 +4,9 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { isTextMime, lookupMime } from "../mime-utils.ts"
+import { isTextMime, lookupMime } from "../utils/mime-utils.ts"
 import { log } from "../logger.ts"
-import { isAllowedPath } from "../path-guard.ts"
+import { isAllowedPath } from "../utils/path-guard.ts"
 
 /** Build standard ingest metadata with source, timestamp, and caller overrides. */
 function buildIngestMetadata(
