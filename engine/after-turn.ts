@@ -14,6 +14,7 @@ type IngestBatchFn = (params: {
 export type AfterTurnSharedState = {
 	turnCount: { value: number }
 	compactionRecommended: { value: boolean }
+	lastAssembledMemories?: { value: string[] }
 }
 
 /** Budget threshold for proactive compaction signal (80%). */
@@ -74,6 +75,34 @@ export function buildAfterTurnHandler(
 		log.debug(
 			`CE afterTurn: turn=${sharedState.turnCount.value} ingested=${result.ingestedCount}/${newMessages.length} tokens≈${totalTokens} (${budgetPct}% of ${budgetLimit})`,
 		)
+
+		// ── Retrieval quality metrics ──
+		const memories = sharedState.lastAssembledMemories?.value ?? []
+		if (memories.length > 0) {
+			// Find the last assistant message in this turn
+			const assistantMsgs = newMessages.filter((m) => m.role === "assistant")
+			const lastAssistant = assistantMsgs[assistantMsgs.length - 1]
+			if (lastAssistant) {
+				const responseText = typeof lastAssistant.content === "string"
+					? lastAssistant.content.toLowerCase()
+					: Array.isArray(lastAssistant.content)
+						? lastAssistant.content.filter((b) => b.type === "text").map((b) => (b.text as string) ?? "").join(" ").toLowerCase()
+						: ""
+				if (responseText) {
+					const matched = memories.filter((mem) =>
+						responseText.includes(mem.slice(0, 50).toLowerCase()),
+					).length
+					const pct = Math.round((matched / memories.length) * 100)
+					log.debug(
+						`CE afterTurn: retrieval precision=${matched}/${memories.length} (${pct}%)`,
+					)
+				}
+			}
+			// Clear after measuring
+			if (sharedState.lastAssembledMemories) {
+				sharedState.lastAssembledMemories.value = []
+			}
+		}
 
 		// ── Proactive compaction signal ──
 		if (totalTokens > budgetLimit * COMPACTION_THRESHOLD) {

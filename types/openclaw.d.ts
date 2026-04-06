@@ -80,7 +80,33 @@ declare module "openclaw/plugin-sdk" {
 		reason?: string
 	}
 
-	export type ContextEngineRuntimeContext = Record<string, unknown>
+	// ── Transcript rewrite types (for maintain()) ──
+
+	export type TranscriptRewriteReplacement = {
+		entryId: string
+		message: AgentMessage
+	}
+
+	export type TranscriptRewriteRequest = {
+		replacements: TranscriptRewriteReplacement[]
+	}
+
+	export type TranscriptRewriteResult = {
+		changed: boolean
+		bytesFreed: number
+		rewrittenEntries: number
+		reason?: string
+	}
+
+	export type ContextEngineMaintenanceResult = TranscriptRewriteResult
+
+	export type SubagentEndReason = "deleted" | "completed" | "swept" | "released"
+
+	export type ContextEngineRuntimeContext = Record<string, unknown> & {
+		rewriteTranscriptEntries?: (
+			request: TranscriptRewriteRequest,
+		) => Promise<TranscriptRewriteResult>
+	}
 
 	/** The pluggable contract for context management. */
 	export interface ContextEngine {
@@ -138,6 +164,18 @@ declare module "openclaw/plugin-sdk" {
 			customInstructions?: string
 			runtimeContext?: ContextEngineRuntimeContext
 		}): Promise<CompactResult>
+
+		maintain?(params: {
+			sessionId: string
+			sessionKey?: string
+			sessionFile: string
+			runtimeContext?: ContextEngineRuntimeContext
+		}): Promise<ContextEngineMaintenanceResult>
+
+		onSubagentEnded?(params: {
+			childSessionKey: string
+			reason: SubagentEndReason
+		}): Promise<void>
 
 		dispose?(): Promise<void>
 	}

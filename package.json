@@ -6,6 +6,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@sinclair/typebox": "0.34.47",
+		"js-tiktoken": "^1.0.21",
 		"mime-types": "^3.0.2",
 		"supermemory": "^4.21.1",
 		"wink-distance": "^2.0.2"
