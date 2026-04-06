@@ -790,8 +790,18 @@ export class SupermemoryClient {
 		containerTags?: string[]
 		metadata?: Record<string, string | number | boolean>
 	}): Promise<{ ok: boolean; ingestedMessageCount: number }> {
+		// SM Conversations API only accepts: user, assistant, system, tool
+		const SM_SUPPORTED_ROLES = new Set(["user", "assistant", "system", "tool"])
+		// Map OpenClaw-specific roles to SM-compatible ones
+		const mapRole = (role: string): string | null => {
+			if (SM_SUPPORTED_ROLES.has(role)) return role
+			if (role === "toolResult" || role === "tool_result") return "tool"
+			return null // unsupported — will be filtered out
+		}
+
 		// Sanitize message content — strip inbound metadata + runtime context
 		const sanitizedMessages = params.messages
+			.filter((msg) => mapRole(msg.role) !== null)
 			.map((msg) => {
 				let content = msg.content
 				if (typeof content === "string") {
@@ -821,7 +831,7 @@ export class SupermemoryClient {
 						})
 				}
 				return {
-					role: msg.role,
+					role: mapRole(msg.role) ?? msg.role,
 					content,
 					...(msg.name && { name: msg.name }),
 				...(msg.tool_calls && {
