@@ -505,15 +505,21 @@ export class SupermemoryClient {
 
 		if (highConfidence.length > 0) {
 			// Delete all high-confidence matches in parallel
-			await Promise.allSettled(
+			const settled = await Promise.allSettled(
 				highConfidence.map((target) => this.deleteMemory(target.id, containerTag)),
 			)
+			const succeeded = settled.filter((r) => r.status === "fulfilled").length
+			const failed = settled.filter((r) => r.status === "rejected").length
+			if (failed > 0) {
+				log.warn(`forgetByQuery: ${failed}/${settled.length} deletes failed`)
+			}
 			const previews = highConfidence
 				.map((r) => `"${limitText(r.content || r.memory || "", 60)}"`)
 				.join(", ")
+			const suffix = failed > 0 ? ` (${failed} failed)` : ""
 			return {
-				success: true,
-				message: `Forgot ${highConfidence.length} memor${highConfidence.length === 1 ? "y" : "ies"}: ${previews}`,
+				success: succeeded > 0,
+				message: `Forgot ${succeeded} memor${succeeded === 1 ? "y" : "ies"}: ${previews}${suffix}`,
 			}
 		}
 
@@ -558,6 +564,10 @@ export class SupermemoryClient {
 			)
 				break
 			page++
+		}
+
+		if (page > MAX_WIPE_PAGES) {
+			log.warn(`wipe: stopped at page ${MAX_WIPE_PAGES} safety cap — wipe may be incomplete (${allIds.length} docs collected so far)`)
 		}
 
 		if (allIds.length === 0) {
