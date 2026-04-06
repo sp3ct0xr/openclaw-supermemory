@@ -68,6 +68,10 @@ export default {
 		let sessionKey: string | undefined
 		const getSessionKey = () => sessionKey
 
+		// Shared mutation callback — tools call this after store/update/forget
+		// to invalidate profile + search caches. Set when CE is registered.
+		const mutationRef = { onMutation: undefined as (() => void) | undefined }
+
 		// Session buffer: accumulates turns, flushes as batch
 		const sessionBuffer: SessionBuffer = buildSessionBuffer(
 			client,
@@ -165,7 +169,8 @@ export default {
 		// Register context engine if enabled
 		if (cfg.contextEngine) {
 			const engine = buildContextEngine(client, cfg, api.logger)
-			// Dual registration: works with both "supermemory-context" and "default" slot config
+			mutationRef.onMutation = () => engine.onMutation()
+			// Dual registration
 			api.registerContextEngine?.("supermemory-context", () => engine)
 			api.registerContextEngine?.("default", () => engine)
 			api.logger.info("supermemory: context engine registered (ownsCompaction: true)")
@@ -180,6 +185,14 @@ export default {
 				} catch (err) {
 					api.logger.warn(`supermemory: session_end flush failed: ${err instanceof Error ? err.message : String(err)}`)
 				}
+			}
+		})
+
+		// Invalidate caches when store/update/forget tools modify SM data
+		const MUTATION_TOOLS = new Set(["supermemory_store", "supermemory_update", "supermemory_forget"])
+		api.on("after_tool_call", (event: Record<string, unknown>) => {
+			if (MUTATION_TOOLS.has(event.toolName as string) && !event.error) {
+				mutationRef.onMutation?.()
 			}
 		})
 

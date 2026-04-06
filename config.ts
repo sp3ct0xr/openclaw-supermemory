@@ -47,6 +47,8 @@ export type SupermemoryConfig = {
 	/** Use SM v4 Conversations API for ingestion instead of addMemory.
 	 *  Passes structured messages directly. Default: true. */
 	useConversationsApi: boolean
+	/** Ingest debounce: batch N turns before sending to SM. Default: 1 (no debounce). */
+	ingestDebounceCount: number
 }
 
 const ALLOWED_KEYS = [
@@ -71,6 +73,7 @@ const ALLOWED_KEYS = [
 	"compactKeepLast",
 	"assembleThreshold",
 	"useConversationsApi",
+	"ingestDebounceCount",
 ]
 
 function assertAllowedKeys(
@@ -151,7 +154,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		autoCapture: (cfg.autoCapture as boolean) ?? true,
 		maxRecallResults: (cfg.maxRecallResults as number) ?? 10,
 		profileFrequency: (cfg.profileFrequency as number) ?? 50,
-		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 60_000,
+		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 300_000,
 		postCompactThreshold: (cfg.postCompactThreshold as number) ?? 0.6,
 		v4FetchTimeoutMs: (cfg.v4FetchTimeoutMs as number) ?? 10_000,
 		captureMode:
@@ -185,6 +188,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		compactKeepLast: (cfg.compactKeepLast as number) ?? 10,
 		assembleThreshold: (cfg.assembleThreshold as number) ?? 0.7,
 		useConversationsApi: (cfg.useConversationsApi as boolean) ?? true,
+		ingestDebounceCount: (cfg.ingestDebounceCount as number) ?? 1,
 	}
 }
 
@@ -224,6 +228,7 @@ export const supermemoryConfigSchema = {
 			compactKeepLast: { type: "number", minimum: 1, maximum: 50 },
 			assembleThreshold: { type: "number", minimum: 0, maximum: 1 },
 			useConversationsApi: { type: "boolean" },
+			ingestDebounceCount: { type: "number", minimum: 1, maximum: 10 },
 		},
 	},
 	parse: parseConfig,
