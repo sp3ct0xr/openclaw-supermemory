@@ -49,6 +49,11 @@ function extractTextsFromMessages(
 		return texts
 			.map((t) =>
 				t
+					// Runtime internal context (subagent tasks, session keys, stats)
+					.replace(
+						/<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>[\s\S]*?<<<END_OPENCLAW_INTERNAL_CONTEXT>>>/g,
+						"",
+					)
 					.replace(
 						/<supermemory-context>[\s\S]*?<\/supermemory-context>\s*/g,
 						"",
@@ -57,6 +62,9 @@ function extractTextsFromMessages(
 						/<supermemory-containers>[\s\S]*?<\/supermemory-containers>\s*/g,
 						"",
 					)
+					// Untrusted child result wrappers
+					.replace(/<<<BEGIN_UNTRUSTED_CHILD_RESULT>>>/g, "")
+					.replace(/<<<END_UNTRUSTED_CHILD_RESULT>>>/g, "")
 					.trim(),
 			)
 			.filter((t) => t.length >= 10)
