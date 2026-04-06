@@ -44,6 +44,9 @@ export type SupermemoryConfig = {
 	/** SM search similarity threshold for context assembly. Higher = fewer but more relevant
 	 *  memories injected. Default: 0.7. */
 	assembleThreshold: number
+	/** Use SM v4 Conversations API for ingestion instead of addMemory.
+	 *  Passes structured messages directly. Default: true. */
+	useConversationsApi: boolean
 }
 
 const ALLOWED_KEYS = [
@@ -67,6 +70,7 @@ const ALLOWED_KEYS = [
 	"contextEngine",
 	"compactKeepLast",
 	"assembleThreshold",
+	"useConversationsApi",
 ]
 
 function assertAllowedKeys(
@@ -180,6 +184,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		contextEngine: (cfg.contextEngine as boolean) ?? false,
 		compactKeepLast: (cfg.compactKeepLast as number) ?? 10,
 		assembleThreshold: (cfg.assembleThreshold as number) ?? 0.7,
+		useConversationsApi: (cfg.useConversationsApi as boolean) ?? true,
 	}
 }
 
@@ -218,6 +223,7 @@ export const supermemoryConfigSchema = {
 			contextEngine: { type: "boolean" },
 			compactKeepLast: { type: "number", minimum: 1, maximum: 50 },
 			assembleThreshold: { type: "number", minimum: 0, maximum: 1 },
+			useConversationsApi: { type: "boolean" },
 		},
 	},
 	parse: parseConfig,

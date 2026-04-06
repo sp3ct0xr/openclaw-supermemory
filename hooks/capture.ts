@@ -75,6 +75,8 @@ function extractTextsFromMessages(
 
 type BufferedTurn = {
 	texts: string[]
+	/** Raw messages for conversations API (when available). */
+	rawMessages?: unknown[]
 	timestamp: string
 	retryCount: number
 }
@@ -110,9 +112,20 @@ export function buildSessionBuffer(
 				cfg.captureMode,
 				lastBufferedIndex,
 			)
-			if (texts.length > 0) {
+			// Store raw messages for conversations API path
+			const rawMsgs: unknown[] | undefined = cfg.useConversationsApi
+				? messages.slice(lastBufferedIndex).filter((m) => {
+					if (!m || typeof m !== "object") return false
+					const role = (m as Record<string, unknown>).role
+					return role === "user" || role === "assistant" || role === "system" || role === "tool"
+				})
+				: undefined
+
+			// Buffer if we have text messages OR raw messages for conversations API
+			if (texts.length > 0 || (rawMsgs && rawMsgs.length > 0)) {
 				bufferedTurns.push({
 					texts,
+					rawMessages: rawMsgs,
 					timestamp: new Date().toISOString(),
 					retryCount: 0,
 				})
@@ -157,40 +170,58 @@ export function buildSessionBuffer(
 
 			const sk = getSessionKey()
 
-			// Build one document per buffered turn with unique IDs
-			const documents = batch.map((turn, idx) => ({
-				content: turn.texts.join("\n\n"),
-				metadata: {
-					source: "openclaw" as const,
-					documentDate: turn.timestamp,
-					timestamp: turn.timestamp,
-					turnIndex: idx,
-				},
-				customId: sk
-					? buildTurnDocumentId(sk, idx)
-					: `anon_${Date.now()}_${crypto.randomUUID().slice(0, 8)}_t${idx}`,
-			}))
+		try {
+				// Conversations API path: pass structured messages directly
+				if (cfg.useConversationsApi) {
+					log.info(`buffer: flushing ${batch.length} turns via conversations API for session ${sk ?? "unknown"}`)
+					const conversationId = sk ?? `anon_${Date.now()}`
+					let success = 0
+					let failed = 0
+					for (const turn of batch) {
+						const msgs = (turn.rawMessages ?? []) as Array<{ role: string; content: unknown; [key: string]: unknown }>
+						if (msgs.length === 0) continue
+						try {
+							await client.ingestConversation({
+								conversationId,
+								messages: msgs as Parameters<typeof client.ingestConversation>[0]["messages"],
+								containerTags: [cfg.containerTag],
+								metadata: {
+									source: "openclaw",
+									documentDate: turn.timestamp,
+								},
+							})
+							success++
+						} catch (turnErr) {
+							log.warn("buffer: conversations API failed for turn", turnErr)
+							failed++
+						}
+					}
+					log.info(`buffer: flushed ${success} ok, ${failed} failed (conversations API)`)
+					return { success, failed }
+				}
 
-			const totalChars = documents.reduce(
-				(sum, d) => sum + d.content.length,
-				0,
-			)
-			log.info(
-				`buffer: flushing ${documents.length} turns (${totalChars} chars) for session ${sk ?? "unknown"}`,
-			)
+				// Legacy path: flatten to text documents
+				const documents = batch.map((turn, idx) => ({
+					content: turn.texts.join("\n\n"),
+					metadata: {
+						source: "openclaw" as const,
+						documentDate: turn.timestamp,
+						timestamp: turn.timestamp,
+						turnIndex: idx,
+					},
+					customId: sk
+						? buildTurnDocumentId(sk, idx)
+						: `anon_${Date.now()}_${crypto.randomUUID().slice(0, 8)}_t${idx}`,
+				}))
+				const totalChars = documents.reduce((sum, d) => sum + d.content.length, 0)
+				log.info(`buffer: flushing ${documents.length} turns (${totalChars} chars) for session ${sk ?? "unknown"}`)
 
-			try {
-				// Use single-add path when entityContext is configured,
-				// since batchAdd (SDK v4.21.1) does not support entityContext.
-				// This ensures server-side atomic fact extraction uses our
-				// enhanced extraction prompt from Phase 3.
 				const useEntityContext =
 					cfg.entityContext && cfg.entityContext.length > 0
 
 				let result: { success: number; failed: number }
 
 				if (useEntityContext && documents.length <= 10) {
-					// Single-add fallback: slower but supports entityContext
 					log.debug(
 						`buffer: using single-add path for ${documents.length} docs (entityContext enabled)`,
 					)
@@ -213,7 +244,6 @@ export function buildSessionBuffer(
 					}
 					result = { success, failed }
 				} else {
-					// Batch path: faster, no entityContext support
 					result = await client.batchAddMemories(documents)
 				}
 
@@ -237,7 +267,7 @@ export function buildSessionBuffer(
 					}
 				}
 
-				return { success: 0, failed: documents.length }
+				return { success: 0, failed: batch.length }
 			} finally {
 				flushInProgress = false
 			}
