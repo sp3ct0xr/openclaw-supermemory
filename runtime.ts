@@ -143,8 +143,8 @@ export function buildPromptSection(params: {
 				"2. **Retrieved memories** — relevant past memories found via semantic search (injected as messages)",
 				"3. **Recent messages** — your most recent conversation turns (kept verbatim)",
 				"",
-				"All conversation turns are automatically ingested into long-term memory after each turn. You do not need to manually recall or capture — it happens automatically.",
-				"If older messages are trimmed from context, their content is preserved in Supermemory. Search to retrieve early-session details if needed.",
+				"Conversation turns are automatically ingested into long-term memory after each turn. You usually do not need to manually recall or capture — it happens automatically.",
+				"If older messages are trimmed from context, their content is typically preserved in Supermemory. Search to retrieve early-session details if needed.",
 			]
 			: [
 				"### What is auto-injected",
@@ -199,8 +199,8 @@ export function buildPromptSection(params: {
 			"### Storing memories",
 			...(params.contextEngineActive
 				? [
-					"Conversation turns are auto-ingested by the context engine — you do NOT need to store conversational facts manually.",
-					"Use supermemory_store only for **explicit** user statements: preferences, corrections, decisions, or when the user says 'remember this'. These are high-signal facts that deserve their own memory entry.",
+					"Conversation turns are usually auto-ingested by the context engine — you do not need to store routine conversational facts manually.",
+					"Use supermemory_store for **explicit** user statements: preferences, corrections, decisions, or when the user says 'remember this'. These are high-signal facts that deserve their own memory entry.",
 				]
 				: [
 					"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
@@ -239,7 +239,7 @@ export function buildPromptSection(params: {
 			"### Ingesting content",
 			...(params.contextEngineActive
 				? [
-					"Conversation content is auto-ingested by the context engine. Use supermemory_ingest for **external content only**: URLs, files, documents, or raw text the user wants indexed for future recall.",
+					"Conversation content is normally auto-ingested by the context engine. Use supermemory_ingest for **external content**: URLs, files, documents, or raw text the user wants indexed for future recall.",
 				]
 				: [
 					"Use supermemory_ingest as the **primary tool** for adding any content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint. Prefer this over supermemory_documents upload.",
