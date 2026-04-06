@@ -24,6 +24,7 @@ export function buildContextEngine(
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
 	logger: { info: (msg: string) => void },
+	externalSearchCache?: SearchCache,
 ): ContextEngine & { onMutation: () => void } {
 	// Shared state across all lifecycle methods
 	const tracker = new IngestionTracker()
@@ -32,7 +33,8 @@ export function buildContextEngine(
 	const turnCount = { value: 0 }
 	const compactionRecommended = { value: false }
 	const lastAssembledMemories = { value: [] as string[] }
-	const searchCache = new SearchCache()
+	// Use external cache (plugin-scope, survives disposal) or create local one
+	const searchCache = externalSearchCache ?? new SearchCache()
 
 	// Health probe — check SM connectivity at creation time
 	client
@@ -101,8 +103,9 @@ export function buildContextEngine(
 			}
 			outageBuffer.clear()
 			tracker.clear()
-			searchCache.clear()
-			clearProfileCache()
+			// Don't clear external search cache on dispose — it lives at plugin scope
+			if (!externalSearchCache) searchCache.clear()
+			// Don't clear profile cache on dispose — it lives at module scope
 			log.info("supermemory CE: disposed")
 		},
 	}
