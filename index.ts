@@ -134,8 +134,8 @@ export default {
 			)
 		}
 
-		// SessionStart: warm profile cache (P2 item #11)
-		api.on("SessionStart", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {
+		// session_start: warm profile cache (P2 item #11)
+		api.on("session_start", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {
 			if (ctx?.sessionKey) sessionKey = ctx.sessionKey as string
 			// Fire-and-forget warmup — don't block session start
 			client.getProfile(undefined)
@@ -146,12 +146,12 @@ export default {
 				.catch(() => {}) // warmup failure is non-critical
 		})
 
-		// PostCompact: re-inject SM memories after context loss (P2 item #8)
-		api.on("PostCompact", buildPostCompactHandler(client, cfg))
+		// after_compaction: re-inject SM memories after context loss (P2 item #8)
+		api.on("after_compaction", buildPostCompactHandler(client, cfg))
 
-		// Flush SM buffer before compaction strips context (P1 item #1)
+		// before_compaction: flush SM buffer before compaction strips context (P1 item #1)
 		// Prevents data loss when compaction fires before agent_end
-		api.on("PreCompact", async () => {
+		api.on("before_compaction", async () => {
 			if (sessionBuffer.pending() > 0) {
 				api.logger.info(`supermemory: PreCompact — flushing ${sessionBuffer.pending()} pending turns`)
 				try {
