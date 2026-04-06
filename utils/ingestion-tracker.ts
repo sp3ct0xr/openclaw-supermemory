@@ -56,6 +56,15 @@ export class IngestionTracker {
 		return result
 	}
 
+	/** Clear entries matching a session key prefix (e.g., on subagent end). */
+	clearBySessionPrefix(prefix: string): void {
+		for (const key of this.states.keys()) {
+			if (key.startsWith(prefix)) {
+				this.states.delete(key)
+			}
+		}
+	}
+
 	/** Clear all tracking state (e.g., on dispose). */
 	clear(): void {
 		this.states.clear()

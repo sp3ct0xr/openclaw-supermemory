@@ -10,6 +10,8 @@ import { buildIngestHandler, buildIngestBatchHandler } from "./ingest.ts"
 import { buildAssembleHandler } from "./assemble.ts"
 import { buildCompactHandler } from "./compact.ts"
 import { buildAfterTurnHandler } from "./after-turn.ts"
+import { buildMaintainHandler } from "./maintain.ts"
+import { buildOnSubagentEndedHandler } from "./subagent.ts"
 
 /**
  * Build the Supermemory context engine.
@@ -28,6 +30,7 @@ export function buildContextEngine(
 	const degradedMode = { value: false }
 	const turnCount = { value: 0 }
 	const compactionRecommended = { value: false }
+	const lastAssembledMemories = { value: [] as string[] }
 
 	// Health probe — check SM connectivity at creation time
 	client
@@ -56,18 +59,21 @@ export function buildContextEngine(
 	// trimOffset: compact writes how many messages to skip, assemble consumes it
 	const trimOffset = { value: 0 }
 
-	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset)
+	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories)
 	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
 		turnCount,
 		compactionRecommended,
+		lastAssembledMemories,
 	})
+	const maintainHandler = buildMaintainHandler(tracker)
+	const onSubagentEndedHandler = buildOnSubagentEndedHandler(tracker)
 
 	return {
 		info: {
 			id: "supermemory-context",
 			name: "Supermemory Context Engine",
-			version: "1.0.0",
+			version: "2.0.0",
 			ownsCompaction: true,
 		},
 
@@ -77,6 +83,8 @@ export function buildContextEngine(
 		assemble: assembleHandler,
 		compact: compactHandler,
 		afterTurn: afterTurnHandler,
+		maintain: maintainHandler,
+		onSubagentEnded: onSubagentEndedHandler,
 
 		async dispose() {
 			// Flush any pending outage buffer entries

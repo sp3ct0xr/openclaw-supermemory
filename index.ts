@@ -165,9 +165,23 @@ export default {
 		// Register context engine if enabled
 		if (cfg.contextEngine) {
 			const engine = buildContextEngine(client, cfg, api.logger)
+			// Dual registration: works with both "supermemory-context" and "default" slot config
 			api.registerContextEngine?.("supermemory-context", () => engine)
+			api.registerContextEngine?.("default", () => engine)
 			api.logger.info("supermemory: context engine registered (ownsCompaction: true)")
 		}
+
+		// session_end: flush pending buffer when session ends
+		api.on("session_end", async () => {
+			if (sessionBuffer.pending() > 0) {
+				api.logger.debug(`supermemory: session_end — flushing ${sessionBuffer.pending()} pending turns`)
+				try {
+					await sessionBuffer.flush()
+				} catch (err) {
+					api.logger.warn(`supermemory: session_end flush failed: ${err instanceof Error ? err.message : String(err)}`)
+				}
+			}
+		})
 
 		registerCommands(api, client, cfg, getSessionKey)
 		registerCli(api, client, cfg)

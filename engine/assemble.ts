@@ -12,6 +12,7 @@ import {
 import { estimateTokens, estimateMessagesTokens } from "../utils/token-estimation.ts"
 import { classifyQuery, type QueryClassification } from "../utils/query-classifier.ts"
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
+import { stripInboundMetadata } from "../memory.ts"
 
 /** SM status page for outage warnings */
 const SM_STATUS_URL = "https://status.supermemory.ai/"
@@ -38,6 +39,7 @@ export function buildAssembleHandler(
 	cfg: SupermemoryConfig,
 	degradedMode: { value: boolean },
 	trimOffset: { value: number },
+	lastAssembledMemories?: { value: string[] },
 ) {
 	return async (params: {
 		sessionId: string
@@ -70,7 +72,7 @@ export function buildAssembleHandler(
 			// ── Classify query for adaptive budget + temporal/container hints ──
 			// Strip runtime context from prompt to avoid searching with internal metadata
 			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
-			const queryText = rawQuery ? stripRuntimeContext(rawQuery) : undefined
+			const queryText = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() || undefined : undefined
 			const classification: QueryClassification = classifyQuery(
 				queryText,
 				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
@@ -118,7 +120,7 @@ export function buildAssembleHandler(
 						profileText = `<supermemory-context>\n${intro}\n\n${sections.join("\n\n")}\n</supermemory-context>`
 
 						// Trim to budget
-						if (estimateTokens(profileText) > profileBudget) {
+					if (estimateTokens(profileText, params.model) > profileBudget) {
 							profileText = profileText.slice(0, profileBudget * 4) // rough trim
 						}
 					}
@@ -182,14 +184,22 @@ export function buildAssembleHandler(
 							results = await client.search(queryText, 10, undefined, searchOpts)
 						}
 
-						if (results.length > 0) {
-							const memoryLines = results
-								.map((r) => `- ${r.content || r.memory || ""}`)
-								.join("\n")
+					if (results.length > 0) {
+						const memoryLines = results
+							.map((r) => r.content || r.memory || "")
 
-							let memoryText = `[Supermemory: relevant memories for this turn]\n${memoryLines}`
+						// Store for retrieval quality metrics in afterTurn
+						if (lastAssembledMemories) {
+							lastAssembledMemories.value = memoryLines.filter(Boolean)
+						}
 
-							if (estimateTokens(memoryText) > memoryBudget) {
+						const formattedLines = memoryLines
+							.map((line) => `- ${line}`)
+							.join("\n")
+
+						let memoryText = `[Supermemory: relevant memories for this turn]\n${formattedLines}`
+
+							if (estimateTokens(memoryText, params.model) > memoryBudget) {
 								memoryText = memoryText.slice(0, memoryBudget * 4)
 							}
 
@@ -221,7 +231,7 @@ export function buildAssembleHandler(
 
 			// ── Combine ──
 			const assembled = [...memoryMessages, ...recentMessages]
-			const totalTokens = estimateMessagesTokens(assembled) + estimateTokens(profileText)
+			const totalTokens = estimateMessagesTokens(assembled, params.model) + estimateTokens(profileText, params.model)
 
 			log.debug(
 				`CE assemble: ${memoryMessages.length > 0 ? memoryMessages.length : "no"} memory msgs, ${recentMessages.length} recent msgs, ${totalTokens} est. tokens`,
