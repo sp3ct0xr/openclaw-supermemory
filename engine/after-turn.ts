@@ -48,15 +48,15 @@ export function buildAfterTurnHandler(
 	}): Promise<void> => {
 		if (params.isHeartbeat) return
 
-		// Increment turn counter
-		sharedState.turnCount.value++
-
 		// Extract only the new messages from this turn
 		const newMessages = params.messages.slice(params.prePromptMessageCount)
 		if (newMessages.length === 0) {
 			log.debug("CE afterTurn: no new messages to ingest")
 			return
 		}
+
+		// Increment turn counter only for real turns with messages
+		sharedState.turnCount.value++
 
 		// Ingest new turn messages
 		const result = await ingestBatchFn({

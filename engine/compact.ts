@@ -21,6 +21,7 @@ export function buildCompactHandler(
 	cfg: SupermemoryConfig,
 	tracker: IngestionTracker,
 	trimOffset: { value: number },
+	compactionRecommended?: { value: boolean },
 ) {
 	return async (params: {
 		sessionId: string
@@ -48,7 +49,9 @@ export function buildCompactHandler(
 			const keepLast = cfg.compactKeepLast
 
 			// Don't compact if we're under budget and not forced
-			if (!params.force && tokensBefore < (params.tokenBudget ?? 128_000) * 0.9) {
+			// compactionRecommended from afterTurn() lowers the threshold
+			const budgetThreshold = compactionRecommended?.value ? 0.8 : 0.9
+			if (!params.force && tokensBefore < (params.tokenBudget ?? 128_000) * budgetThreshold) {
 				return { ok: true, compacted: false, reason: "under budget" }
 			}
 

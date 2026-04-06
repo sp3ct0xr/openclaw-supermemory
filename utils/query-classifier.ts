@@ -33,6 +33,20 @@ function toISODate(d: Date): string {
 	return d.toISOString().split("T")[0]!
 }
 
+/**
+ * Resolve the most likely year for a referenced month.
+ * For "after/since" (past-oriented): use most recent past occurrence.
+ * For "before/in" (current-oriented): always use current year.
+ */
+function resolveMonthYear(month: number, now: Date, pastOriented: boolean): number {
+	if (pastOriented) {
+		// "since March" in January → last year's March
+		return month > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear()
+	}
+	// "before March" / "in March" → always current year
+	return now.getFullYear()
+}
+
 function extractTemporal(prompt: string): { after?: string; before?: string } | undefined {
 	const lower = prompt.toLowerCase()
 	const now = new Date()
@@ -80,32 +94,34 @@ function extractTemporal(prompt: string): { after?: string; before?: string } | 
 	}
 
 	// "before <month>" / "after <month>" / "since <month>"
+	// "before <month>" → current year (not past-oriented)
 	const beforeMonth = lower.match(/\bbefore\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/)
 	if (beforeMonth?.[1]) {
 		const month = MONTH_MAP[beforeMonth[1]]
 		if (month !== undefined) {
-			const year = month > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear()
+			const year = resolveMonthYear(month, now, false)
 			result.before = `${year}-${String(month).padStart(2, "0")}-01`
 			return result
 		}
 	}
 
+	// "after/since <month>" → most recent past occurrence
 	const afterMonth = lower.match(/\b(?:after|since)\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/)
 	if (afterMonth?.[1]) {
 		const month = MONTH_MAP[afterMonth[1]]
 		if (month !== undefined) {
-			const year = month > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear()
+			const year = resolveMonthYear(month, now, true)
 			result.after = `${year}-${String(month).padStart(2, "0")}-01`
 			return result
 		}
 	}
 
-	// "in <month>" → scope to that month
+	// "in <month>" → scope to that month (current year)
 	const inMonth = lower.match(/\bin\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/)
 	if (inMonth?.[1]) {
 		const month = MONTH_MAP[inMonth[1]]
 		if (month !== undefined) {
-			const year = month > now.getMonth() + 1 ? now.getFullYear() - 1 : now.getFullYear()
+			const year = resolveMonthYear(month, now, false)
 			result.after = `${year}-${String(month).padStart(2, "0")}-01`
 			const nextMonth = month === 12 ? 1 : month + 1
 			const nextYear = month === 12 ? year + 1 : year

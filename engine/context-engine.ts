@@ -57,7 +57,7 @@ export function buildContextEngine(
 	const trimOffset = { value: 0 }
 
 	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset)
-	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset)
+	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
 		turnCount,
 		compactionRecommended,
