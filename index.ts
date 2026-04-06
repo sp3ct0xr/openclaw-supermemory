@@ -25,6 +25,7 @@ import { registerSettingsTool } from "./tools/settings.ts"
 import { registerUpdateTool } from "./tools/update.ts"
 import { registerTimelineTool } from "./tools/timeline.ts"
 import { buildPostCompactHandler } from "./hooks/post-compact.ts"
+import { buildContextEngine } from "./engine/context-engine.ts"
 
 try {
 	const stateDir =
@@ -75,7 +76,9 @@ export default {
 		)
 
 		api.registerMemoryRuntime?.(buildMemoryRuntime(client))
-		api.registerMemoryPromptSection?.(buildPromptSection)
+		api.registerMemoryPromptSection?.((toolParams: { availableTools: Set<string> }) =>
+			buildPromptSection({ ...toolParams, contextEngineActive: cfg.contextEngine }),
+		)
 		api.registerMemoryFlushPlan?.(() => {
 			if (sessionBuffer.pending() === 0) return null
 			return async () => {
@@ -111,28 +114,25 @@ export default {
 				)
 		}
 
-		if (cfg.autoRecall) {
-			const recallHandler = buildRecallHandler(client, cfg)
-			// Migrated from deprecated before_agent_start → before_prompt_build
-			// per docs.openclaw.ai/plugins/architecture#legacy-hooks:
-			// "prefer before_prompt_build for prompt mutation work"
-			// Same event shape { prompt, messages } and return { prependContext }
-			// ctx.sessionKey confirmed available in both hooks (verified in core source)
-			api.on(
-				"before_prompt_build",
-				(event: Record<string, unknown>, ctx: Record<string, unknown>) => {
-					if (ctx.sessionKey) sessionKey = ctx.sessionKey as string
-					return recallHandler(event, ctx)
-				},
-			)
-		}
+	// CE handles context assembly → skip autoRecall when CE is active
+	if (cfg.autoRecall && !cfg.contextEngine) {
+		const recallHandler = buildRecallHandler(client, cfg)
+		api.on(
+			"before_prompt_build",
+			(event: Record<string, unknown>, ctx: Record<string, unknown>) => {
+				if (ctx.sessionKey) sessionKey = ctx.sessionKey as string
+				return recallHandler(event, ctx)
+			},
+		)
+	}
 
-		if (cfg.autoCapture) {
-			api.on(
-				"agent_end",
-				buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
-			)
-		}
+	// CE handles ingestion → skip autoCapture when CE is active
+	if (cfg.autoCapture && !cfg.contextEngine) {
+		api.on(
+			"agent_end",
+			buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
+		)
+	}
 
 		// SessionStart: warm profile cache (P2 item #11)
 		api.on("SessionStart", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {
@@ -161,6 +161,13 @@ export default {
 				}
 			}
 		})
+
+		// Register context engine if enabled
+		if (cfg.contextEngine) {
+			const engine = buildContextEngine(client, cfg, api.logger)
+			api.registerContextEngine?.("supermemory-context", () => engine)
+			api.logger.info("supermemory: context engine registered (ownsCompaction: true)")
+		}
 
 		registerCommands(api, client, cfg, getSessionKey)
 		registerCli(api, client, cfg)

@@ -29,7 +29,7 @@ function extractKeywords(text: string): Set<string> {
 	)
 }
 
-function hasProfileOverlap(query: string, profile: ProfileResult): boolean {
+export function hasProfileOverlap(query: string, profile: ProfileResult): boolean {
 	const queryWords = extractKeywords(query)
 	if (queryWords.size === 0) return true // empty/trivial query → always inject
 	const profileText = [...profile.static, ...profile.dynamic].join(" ")
@@ -191,7 +191,15 @@ function countUserTurns(messages: unknown[]): number {
 	return count
 }
 
-function formatContainerMetadata(
+/** Get cached profile if valid, or null. Used by CE assemble(). */
+export function getProfileCache(): ProfileResult | null {
+	if (profileCacheEntry && profileCacheEntry.expiresAt > Date.now()) {
+		return profileCacheEntry.data
+	}
+	return null
+}
+
+export function formatContainerMetadata(
 	cfg: SupermemoryConfig,
 	messageProvider?: string,
 ): string | null {

@@ -93,6 +93,22 @@
 			"placeholder": "10000",
 			"help": "Timeout for SM v4 direct memory creation API calls (milliseconds). Default: 10000 (10s). Increase on slow networks.",
 			"advanced": true
+		},
+		"contextEngine": {
+			"label": "Enable Context Engine",
+			"help": "Register a Supermemory-backed context engine that controls context assembly, ingestion, and compaction. When enabled, autoCapture and autoRecall are auto-disabled. Set plugins.slots.contextEngine to 'supermemory-context' in openclaw.json."
+		},
+		"compactKeepLast": {
+			"label": "Compact Keep Last",
+			"placeholder": "10",
+			"help": "Number of recent messages to keep verbatim after lossless compaction. Default: 10.",
+			"advanced": true
+		},
+		"assembleThreshold": {
+			"label": "Assembly Similarity Threshold",
+			"placeholder": "0.7",
+			"help": "Minimum SM search similarity for memories injected during context assembly. Higher = fewer but more relevant results. Range: 0.0-1.0. Default: 0.7.",
+			"advanced": true
 		}
 	},
 	"configSchema": {
@@ -123,6 +139,9 @@
 			"customContainerInstructions": { "type": "string" },
 			"filterPrompt": { "type": "string" },
 			"shouldLLMFilter": { "type": "boolean" },
+			"contextEngine": { "type": "boolean" },
+			"compactKeepLast": { "type": "number", "minimum": 1, "maximum": 50 },
+			"assembleThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
 			"profileCacheTtlMs": { "type": "number", "minimum": 0 },
 			"postCompactThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
 			"v4FetchTimeoutMs": { "type": "number", "minimum": 1000 }
