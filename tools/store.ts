@@ -27,6 +27,12 @@ export function registerStoreTool(
 				category: Type.Optional(
 					Type.Unsafe<string>({ type: "string", enum: [...MEMORY_CATEGORIES] }),
 				),
+				permanent: Type.Optional(
+					Type.Boolean({
+						description:
+							"Mark as permanent identity trait (name, hometown, core preferences). Permanent memories are never auto-forgotten by Supermemory. Default: false.",
+					}),
+				),
 				eventDate: Type.Optional(
 					Type.String({
 						description:
@@ -45,6 +51,7 @@ export function registerStoreTool(
 				params: {
 					text: string
 					category?: string
+					permanent?: boolean
 					eventDate?: string
 					containerTag?: string
 				},
@@ -70,6 +77,7 @@ export function registerStoreTool(
 				const result = await client.addOrUpdateMemory({
 					content: params.text,
 					category,
+					isStatic: params.permanent ?? false,
 					metadata: {
 						type: category,
 						source: "openclaw_tool",

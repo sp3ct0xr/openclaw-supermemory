@@ -647,6 +647,8 @@ export class SupermemoryClient {
 	async addOrUpdateMemory(params: {
 		content: string
 		category?: MemoryCategory
+		/** SM v4 isStatic: true = permanent identity trait, false = dynamic fact */
+		isStatic?: boolean
 		metadata?: Record<string, string | number | boolean>
 		customId?: string
 		containerTag?: string

@@ -73,7 +73,9 @@ RULES:
 - If a new fact updates or extends a previously stated fact, note the relationship (e.g. "User now works at Y" updates "User worked at X").
 - Include temporal context when relevant: "As of [date], user is working on X".
 - When in doubt, do NOT create a memory. Precision > recall.
-- When the user discusses a document, extract its title, type, and key topic as an entity memory (e.g. "User shared 'Q1 Report' — quarterly revenue summary").`
+- When the user discusses a document, extract its title, type, and key topic as an entity memory (e.g. "User shared 'Q1 Report' — quarterly revenue summary").
+- If a successful approach or reasoning pattern was discovered, note it as a derived insight (e.g., "User found that approach X works well for Y").
+- Temporal facts should include time context when stated (e.g., "As of April 2026, user is working on project Z").`
 
 export function clampEntityContext(ctx: string): string {
 	if (ctx.length <= MAX_ENTITY_CONTEXT_LENGTH) return ctx

@@ -15,6 +15,9 @@ export type SupermemoryConfig = {
 	autoCapture: boolean
 	maxRecallResults: number
 	profileFrequency: number
+	/** TTL in milliseconds for SM profile cache. Default: 60000 (60s).
+	 *  Reduces API calls by caching profile responses between turns. */
+	profileCacheTtlMs: number
 	captureMode: CaptureMode
 	entityContext: string
 	debug: boolean
@@ -40,6 +43,7 @@ const ALLOWED_KEYS = [
 	"autoCapture",
 	"maxRecallResults",
 	"profileFrequency",
+	"profileCacheTtlMs",
 	"captureMode",
 	"entityContext",
 	"debug",
@@ -129,6 +133,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		autoCapture: (cfg.autoCapture as boolean) ?? true,
 		maxRecallResults: (cfg.maxRecallResults as number) ?? 10,
 		profileFrequency: (cfg.profileFrequency as number) ?? 50,
+		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 60_000,
 		captureMode:
 			cfg.captureMode === "everything"
 				? ("everything" as const)
@@ -176,6 +181,7 @@ export const supermemoryConfigSchema = {
 			autoCapture: { type: "boolean" },
 			maxRecallResults: { type: "number" },
 			profileFrequency: { type: "number" },
+			profileCacheTtlMs: { type: "number" },
 			captureMode: { type: "string", enum: ["all", "everything"] },
 			entityContext: { type: "string" },
 			debug: { type: "boolean" },

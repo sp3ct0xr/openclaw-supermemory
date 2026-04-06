@@ -158,7 +158,9 @@ export function buildSessionBuffer(
 					timestamp: turn.timestamp,
 					turnIndex: idx,
 				},
-				customId: sk ? buildTurnDocumentId(sk, idx) : undefined,
+				customId: sk
+					? buildTurnDocumentId(sk, idx)
+					: `anon_${Date.now()}_${crypto.randomUUID().slice(0, 8)}_t${idx}`,
 			}))
 
 			const totalChars = documents.reduce(
