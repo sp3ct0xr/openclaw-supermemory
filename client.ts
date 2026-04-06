@@ -799,8 +799,11 @@ export class SupermemoryClient {
 						? stripRuntimeContext(stripInboundMetadata(content)).trim()
 						: stripRuntimeContext(content).trim()
 					content = stripped
-				} else if (Array.isArray(content)) {
+			} else if (Array.isArray(content)) {
 					content = content
+						// Only keep SM-supported block types (text, image_url)
+						// Filter out thinking, tool_use, tool_result, and other provider-specific blocks
+						.filter((block) => block.type === "text" || block.type === "image_url")
 						.map((block) => {
 							if (block.type === "text" && typeof block.text === "string") {
 								const stripped = msg.role === "user"
