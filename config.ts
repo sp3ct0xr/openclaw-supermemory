@@ -35,6 +35,15 @@ export type SupermemoryConfig = {
 	/** Enable server-side LLM filtering during ingestion.
 	 *  Must be true for filterPrompt to take effect. */
 	shouldLLMFilter: boolean | undefined
+	/** Enable context engine registration. When true, plugin registers a ContextEngine
+	 *  that controls context assembly, ingestion, and compaction. autoCapture and autoRecall
+	 *  are auto-disabled when this is active. Default: false. */
+	contextEngine: boolean
+	/** Number of recent messages to keep verbatim after compaction. Default: 10. */
+	compactKeepLast: number
+	/** SM search similarity threshold for context assembly. Higher = fewer but more relevant
+	 *  memories injected. Default: 0.7. */
+	assembleThreshold: number
 }
 
 const ALLOWED_KEYS = [
@@ -55,6 +64,9 @@ const ALLOWED_KEYS = [
 	"customContainerInstructions",
 	"filterPrompt",
 	"shouldLLMFilter",
+	"contextEngine",
+	"compactKeepLast",
+	"assembleThreshold",
 ]
 
 function assertAllowedKeys(
@@ -165,6 +177,9 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 				: typeof cfg.filterPrompt === "string" && cfg.filterPrompt.trim()
 					? true
 					: undefined,
+		contextEngine: (cfg.contextEngine as boolean) ?? false,
+		compactKeepLast: (cfg.compactKeepLast as number) ?? 10,
+		assembleThreshold: (cfg.assembleThreshold as number) ?? 0.7,
 	}
 }
 
@@ -200,6 +215,9 @@ export const supermemoryConfigSchema = {
 			customContainerInstructions: { type: "string" },
 			filterPrompt: { type: "string" },
 			shouldLLMFilter: { type: "boolean" },
+			contextEngine: { type: "boolean" },
+			compactKeepLast: { type: "number", minimum: 1, maximum: 50 },
+			assembleThreshold: { type: "number", minimum: 0, maximum: 1 },
 		},
 	},
 	parse: parseConfig,

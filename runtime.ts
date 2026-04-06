@@ -110,6 +110,7 @@ export function buildMemoryRuntime(
 
 export function buildPromptSection(params: {
 	availableTools: Set<string>
+	contextEngineActive?: boolean
 }): string[] {
 	const hasSearch = params.availableTools.has("supermemory_search")
 	const hasStore = params.availableTools.has("supermemory_store")
@@ -142,14 +143,27 @@ export function buildPromptSection(params: {
 	]
 
 	if (hasSearch) {
-		lines.push(
-			"### Active memory search",
-			"Profile context alone is not enough. When the user's request relates to past conversations, prior decisions, specific preferences, or anything that may have been discussed before:",
-			"",
-			"1. **Search before you act** — call supermemory_search with a focused query before responding to questions that might involve prior context.",
-			"2. **Be specific** — use targeted queries like \"user's preferred database\" rather than broad ones like \"preferences\".",
-			"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
-			"4. **Don't guess from profile alone** — the profile is a summary. Search for details when the user asks about specifics.",
+		if (params.contextEngineActive) {
+			lines.push(
+				"### Memory search",
+				"Relevant memories and your user profile are automatically injected into context each turn by the context engine. Use supermemory_search only for deeper or more specific queries — e.g. when you need more results, a specific time range, or a targeted container.",
+				"",
+				"**When to search explicitly:**",
+				"- The auto-injected context doesn't cover what you need",
+				"- You need results from a specific time range (use `after`/`before`)",
+				"- You want to search a specific container (use `containerTag`)",
+				"- You need deep chunk-level search (use `mode: 'deep'`)",
+				"",
+			)
+		} else {
+			lines.push(
+				"### Active memory search",
+				"Profile context alone is not enough. When the user's request relates to past conversations, prior decisions, specific preferences, or anything that may have been discussed before:",
+				"",
+				"1. **Search before you act** — call supermemory_search with a focused query before responding to questions that might involve prior context.",
+				"2. **Be specific** — use targeted queries like \"user's preferred database\" rather than broad ones like \"preferences\".",
+				"3. **Search on uncertainty** — if you're unsure whether the user has mentioned something before, search. It's cheap and fast.",
+				"4. **Don't guess from profile alone** — the profile is a summary. Search for details when the user asks about specifics.",
 			"",
 			"**Search modes — when to use each:**",
 			"- `mode: 'fast'` (default) — quick recall of single facts, preferences, or recent context. Use when one keyword or phrase identifies what you need.",
@@ -165,6 +179,7 @@ export function buildPromptSection(params: {
 			"If a search result shows ⏱ (stale) or is >30 days old, treat it as a lead to investigate, not a fact to assert.",
 			"",
 		)
+		}
 	}
 	if (hasStore) {
 		lines.push(

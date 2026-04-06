@@ -20,6 +20,7 @@
 		"hooks/*.ts",
 		"commands/*.ts",
 		"utils/*.ts",
+		"engine/*.ts",
 		"types/*.d.ts",
 		"lib/*.d.ts"
 	],
