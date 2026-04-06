@@ -26,6 +26,8 @@ export function buildContextEngine(
 	const tracker = new IngestionTracker()
 	const outageBuffer = new OutageBuffer()
 	const degradedMode = { value: false }
+	const turnCount = { value: 0 }
+	const compactionRecommended = { value: false }
 
 	// Health probe — check SM connectivity at creation time
 	client
@@ -55,8 +57,11 @@ export function buildContextEngine(
 	const trimOffset = { value: 0 }
 
 	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset)
-	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset)
-	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler)
+	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
+	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
+		turnCount,
+		compactionRecommended,
+	})
 
 	return {
 		info: {
