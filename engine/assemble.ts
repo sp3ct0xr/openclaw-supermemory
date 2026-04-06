@@ -1,5 +1,6 @@
 import type { AgentMessage, AssembleResult } from "openclaw/plugin-sdk"
-import type { SupermemoryClient } from "../client.ts"
+import type { SearchResult, SupermemoryClient } from "../client.ts"
+import { buildTemporalFilters } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import {
@@ -9,14 +10,17 @@ import {
 	formatContainerMetadata,
 } from "../hooks/recall.ts"
 import { estimateTokens, estimateMessagesTokens } from "../utils/token-estimation.ts"
+import { classifyQuery, type QueryClassification } from "../utils/query-classifier.ts"
 
 /** SM status page for outage warnings */
 const SM_STATUS_URL = "https://status.supermemory.ai/"
 
-/** Default budget ratios (Phase 2 makes these adaptive) */
-const BUDGET_PROFILE = 0.15
-const BUDGET_MEMORY = 0.35
-const BUDGET_RECENT = 0.50
+/** Adaptive budget ratios by query complexity. */
+const BUDGET_RATIOS = {
+	simple:    { profile: 0.05, memory: 0.10, recent: 0.85 },
+	knowledge: { profile: 0.20, memory: 0.50, recent: 0.30 },
+	multihop:  { profile: 0.15, memory: 0.45, recent: 0.40 },
+} as const
 
 /** Probe timeout for recovery detection (ms) */
 const PROBE_TIMEOUT_MS = 2000
@@ -62,10 +66,24 @@ export function buildAssembleHandler(
 				}
 			}
 
+			// ── Classify query for adaptive budget + temporal/container hints ──
+			const queryText = params.prompt ?? extractLastUserQuery(params.messages)
+			const classification: QueryClassification = classifyQuery(
+				queryText,
+				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
+			)
+			const ratios = BUDGET_RATIOS[classification.complexity]
+
 			const budget = params.tokenBudget ?? 128_000
-			const profileBudget = Math.floor(budget * BUDGET_PROFILE)
-			const memoryBudget = Math.floor(budget * BUDGET_MEMORY)
-			const recentBudget = Math.floor(budget * BUDGET_RECENT)
+			const profileBudget = Math.floor(budget * ratios.profile)
+			const memoryBudget = Math.floor(budget * ratios.memory)
+			const recentBudget = Math.floor(budget * ratios.recent)
+
+			log.debug(
+				`CE assemble: classified="${classification.complexity}" budget=${Math.round(ratios.profile * 100)}/${Math.round(ratios.memory * 100)}/${Math.round(ratios.recent * 100)}` +
+				(classification.temporal ? ` temporal=${JSON.stringify(classification.temporal)}` : "") +
+				(classification.containerHint ? ` container=${classification.containerHint}` : ""),
+			)
 
 			// ── Zone 1: Profile (systemPromptAddition) ──
 			let profileText = ""
@@ -115,37 +133,72 @@ export function buildAssembleHandler(
 
 			// ── Zone 2: Retrieved Memories (as messages) ──
 			const memoryMessages: AgentMessage[] = []
-			try {
-				const query = params.prompt ?? extractLastUserQuery(params.messages)
-				if (query && query.length >= 3) {
-					const results = await client.search(query, 10, undefined, {
-						searchMode: "hybrid",
-						rerank: true,
-						threshold: cfg.assembleThreshold,
-					})
+			// Skip Zone 2 for simple queries — saves ~200ms latency + avoids irrelevant results
+			if (classification.complexity !== "simple") {
+				try {
+					if (queryText && queryText.length >= 3) {
+						// Build temporal filters from classifier
+						const temporalFilters = classification.temporal
+							? buildTemporalFilters(classification.temporal)
+							: undefined
 
-					if (results.length > 0) {
-						// Format as a single system message with memory context
-						const memoryLines = results
-							.map((r) => `- ${r.content || r.memory || ""}`)
-							.join("\n")
-
-						let memoryText = `[Supermemory: relevant memories for this turn]\n${memoryLines}`
-
-						// Trim to budget
-						if (estimateTokens(memoryText) > memoryBudget) {
-							memoryText = memoryText.slice(0, memoryBudget * 4)
+						const searchOpts = {
+							searchMode: "hybrid" as const,
+							rerank: true,
+							threshold: cfg.assembleThreshold,
+							...(temporalFilters && { filters: temporalFilters }),
 						}
 
-						memoryMessages.push({
-							role: "system",
-							content: memoryText,
-						})
+						// Container-aware dual search when classifier detects a topic
+						let results: SearchResult[]
+						const rootTag = client.getContainerTag()
+						if (
+							classification.containerHint &&
+							cfg.enableCustomContainerTags &&
+							classification.containerHint !== rootTag
+						) {
+							log.debug(`CE assemble: dual search — root + ${classification.containerHint}`)
+							const [rootResults, topicResults] = await Promise.all([
+								client.search(queryText, 10, rootTag, searchOpts),
+								client.search(queryText, 10, classification.containerHint, searchOpts),
+							])
+							// Merge: topic results first (more specific), then root, dedupe by ID
+							const seen = new Set<string>()
+							const merged: SearchResult[] = []
+							for (const r of [...topicResults, ...rootResults]) {
+								if (!seen.has(r.id)) {
+									seen.add(r.id)
+									merged.push(r)
+								}
+							}
+							// Sort by relevance (rerank=true)
+							results = merged
+								.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+								.slice(0, 10)
+						} else {
+							results = await client.search(queryText, 10, undefined, searchOpts)
+						}
+
+						if (results.length > 0) {
+							const memoryLines = results
+								.map((r) => `- ${r.content || r.memory || ""}`)
+								.join("\n")
+
+							let memoryText = `[Supermemory: relevant memories for this turn]\n${memoryLines}`
+
+							if (estimateTokens(memoryText) > memoryBudget) {
+								memoryText = memoryText.slice(0, memoryBudget * 4)
+							}
+
+							memoryMessages.push({
+								role: "system",
+								content: memoryText,
+							})
+						}
 					}
+				} catch (err) {
+					log.warn(`CE assemble: SM search failed — ${err instanceof Error ? err.message : String(err)}`)
 				}
-			} catch (err) {
-				log.warn(`CE assemble: SM search failed — ${err instanceof Error ? err.message : String(err)}`)
-				// Continue without memories — Zone 1 + 3 still available
 			}
 
 			// ── Zone 3: Recent Messages ──
