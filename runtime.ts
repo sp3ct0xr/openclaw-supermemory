@@ -135,8 +135,21 @@ export function buildPromptSection(params: {
 		"",
 		"Memory is managed by Supermemory (cloud). Do not read or write local memory files like MEMORY.md or memory/*.md — they do not exist.",
 		"",
-		"### What is auto-injected",
-		"Your user profile (persistent facts and recent context) is automatically injected at the start of each session. This gives you baseline knowledge about the user without any tool calls.",
+	...(params.contextEngineActive
+			? [
+				"### Context Engine (active)",
+				"A context engine manages your memory automatically every turn. It assembles three zones of context:",
+				"1. **Profile** — persistent facts and recent context about the user (system prompt)",
+				"2. **Retrieved memories** — relevant past memories found via semantic search (injected as messages)",
+				"3. **Recent messages** — your most recent conversation turns (kept verbatim)",
+				"",
+				"All conversation turns are automatically ingested into long-term memory after each turn. You do not need to manually recall or capture — it happens automatically.",
+				"If older messages are trimmed from context, their content is preserved in Supermemory. Search to retrieve early-session details if needed.",
+			]
+			: [
+				"### What is auto-injected",
+				"Your user profile (persistent facts and recent context) is automatically injected at the start of each session. This gives you baseline knowledge about the user without any tool calls.",
+			]),
 		"",
 		`### Available tools\n${[...params.availableTools].map((t) => `- \`${t}\``).join("\n")}`,
 		"",
@@ -184,7 +197,14 @@ export function buildPromptSection(params: {
 	if (hasStore) {
 		lines.push(
 			"### Storing memories",
-			"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
+			...(params.contextEngineActive
+				? [
+					"Conversation turns are auto-ingested by the context engine — you do NOT need to store conversational facts manually.",
+					"Use supermemory_store only for **explicit** user statements: preferences, corrections, decisions, or when the user says 'remember this'. These are high-signal facts that deserve their own memory entry.",
+				]
+				: [
+					"Use supermemory_store when the user explicitly asks you to remember something, states a preference, makes a decision, or corrects you. Do not store transient task details.",
+				]),
 			"",
 			"**Atomic facts**: Store ONE fact per call. Instead of \"User likes dark mode and uses pnpm\", make two separate calls.",
 			"**Categories**: The tool auto-detects category (preference/fact/decision/entity/correction/confirmation) but you can override. Corrections are HIGH priority — they replace outdated information. Confirmations reinforce validated approaches.",
@@ -217,7 +237,13 @@ export function buildPromptSection(params: {
 	if (hasIngest) {
 		lines.push(
 			"### Ingesting content",
-			"Use supermemory_ingest as the **primary tool** for adding any content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint. Prefer this over supermemory_documents upload.",
+			...(params.contextEngineActive
+				? [
+					"Conversation content is auto-ingested by the context engine. Use supermemory_ingest for **external content only**: URLs, files, documents, or raw text the user wants indexed for future recall.",
+				]
+				: [
+					"Use supermemory_ingest as the **primary tool** for adding any content to memory. Pass a URL, raw text, or local file path — the plugin auto-detects the format and routes to the correct Supermemory endpoint. Prefer this over supermemory_documents upload.",
+				]),
 			"",
 			"**Params:** `content` (URL, text, or file path), `customId` (your ID for dedup), `containerTag`, `metadata` (key-value pairs for filtering).",
 			"**Supported content:**",
