@@ -29,10 +29,6 @@ export type SupermemoryConfig = {
 	enableCustomContainerTags: boolean
 	customContainers: CustomContainer[]
 	customContainerInstructions: string
-	/** Route memories to category-specific containers (e.g. {base}_preferences).
-	 *  Default: false — all memories go to the base container.
-	 *  Enable only after verifying it doesn't conflict with custom containers. */
-	categoryRouting: boolean
 	/** Org-wide LLM prompt controlling what gets extracted from ALL ingested content.
 	 *  Different from entityContext (per-container). Leave undefined to use Supermemory defaults. */
 	filterPrompt: string | undefined
@@ -57,7 +53,6 @@ const ALLOWED_KEYS = [
 	"enableCustomContainerTags",
 	"customContainers",
 	"customContainerInstructions",
-	"categoryRouting",
 	"filterPrompt",
 	"shouldLLMFilter",
 ]
@@ -159,12 +154,6 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 			typeof cfg.customContainerInstructions === "string"
 				? cfg.customContainerInstructions
 				: "",
-		// Category routing is forced OFF when custom containers are defined
-		// to avoid routing conflicts between the two systems.
-		categoryRouting:
-			customContainers.length > 0
-				? false
-				: ((cfg.categoryRouting as boolean) ?? false),
 		filterPrompt:
 			typeof cfg.filterPrompt === "string" && cfg.filterPrompt.trim()
 				? cfg.filterPrompt.trim()
@@ -209,7 +198,6 @@ export const supermemoryConfigSchema = {
 				},
 			},
 			customContainerInstructions: { type: "string" },
-			categoryRouting: { type: "boolean" },
 			filterPrompt: { type: "string" },
 			shouldLLMFilter: { type: "boolean" },
 		},

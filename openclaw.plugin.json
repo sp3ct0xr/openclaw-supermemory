@@ -65,11 +65,6 @@
 			"help": "Instructions for AI on how to route memories to custom containers",
 			"advanced": true
 		},
-		"categoryRouting": {
-			"label": "Category Routing",
-			"help": "Route memories to category-specific containers (preferences, facts, decisions, etc.). ⚠️ Multiplies search API calls by 6x. Auto-disabled when Custom Containers are defined.",
-			"advanced": true
-		},
 		"filterPrompt": {
 			"label": "Filter Prompt (Org-Wide)",
 			"placeholder": "Custom instructions for org-wide content filtering...",
@@ -126,7 +121,6 @@
 				}
 			},
 			"customContainerInstructions": { "type": "string" },
-			"categoryRouting": { "type": "boolean" },
 			"filterPrompt": { "type": "string" },
 			"shouldLLMFilter": { "type": "boolean" },
 			"profileCacheTtlMs": { "type": "number", "minimum": 0 },

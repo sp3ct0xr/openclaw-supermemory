@@ -209,39 +209,12 @@ export function registerSearchTool(
 					...(filters && { filters }),
 				}
 
-				if (cfg.categoryRouting && !params.containerTag) {
-					const tags = client.getCategoryContainerTags()
-					log.debug(
-						`search tool: cross-container search across ${tags.length} containers`,
-					)
-					const allResults = await Promise.all(
-						tags.map((tag) =>
-							client.search(params.query, limit, tag, searchOpts),
-						),
-					)
-					const seen = new Set<string>()
-					const merged: SearchResult[] = []
-					for (const batch of allResults) {
-						for (const r of batch) {
-							if (!seen.has(r.id)) {
-								seen.add(r.id)
-								merged.push(r)
-							}
-						}
-					}
-					results = merged
-						.sort(
-							(a, b) => (b.similarity ?? 0) - (a.similarity ?? 0),
-						)
-						.slice(0, limit)
-				} else {
-					results = await client.search(
-						params.query,
-						limit,
-						params.containerTag,
-						searchOpts,
-					)
-				}
+				results = await client.search(
+					params.query,
+					limit,
+					params.containerTag,
+					searchOpts,
+				)
 
 				if (results.length === 0) {
 					return {
