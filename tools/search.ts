@@ -33,6 +33,17 @@ function compareFreshness(
 	return (b.similarity ?? b.score ?? 0) - (a.similarity ?? a.score ?? 0) // tiebreaker
 }
 
+/** Sort by relevance (similarity/score descending), freshness as tiebreaker. */
+function compareRelevance(
+	a: { similarity?: number; score?: number; metadata?: Record<string, unknown> | null; updatedAt?: string },
+	b: { similarity?: number; score?: number; metadata?: Record<string, unknown> | null; updatedAt?: string },
+): number {
+	const sa = a.similarity ?? a.score ?? 0
+	const sb = b.similarity ?? b.score ?? 0
+	if (sa !== sb) return sb - sa // most relevant first
+	return getResultTimestamp(b) - getResultTimestamp(a) // tiebreaker: newest
+}
+
 /**
  * Compute a freshness tag from a date string.
  * Returns "" if < 7 days or no date, a mild warning for 7-30 days,
@@ -193,8 +204,10 @@ export function registerSearchTool(
 								merged.push(r)
 							}
 						}
+						// Deep mode defaults to rerank=true — sort by relevance
+						const deepReranked = params.rerank ?? true
 						deepResults = merged
-							.sort(compareFreshness)
+							.sort(deepReranked ? compareRelevance : compareFreshness)
 							.slice(0, limit)
 					} else {
 						deepResults = await client.deepSearch(
@@ -268,8 +281,11 @@ export function registerSearchTool(
 							merged.push(r)
 						}
 					}
+					// Fast mode: rerank off by default — sort by freshness
+					// When rerank explicitly enabled, trust relevance ordering
+					const fastReranked = params.rerank === true
 					results = merged
-						.sort(compareFreshness)
+						.sort(fastReranked ? compareRelevance : compareFreshness)
 						.slice(0, limit)
 				} else {
 					results = await client.search(

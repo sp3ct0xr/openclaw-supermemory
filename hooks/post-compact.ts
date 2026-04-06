@@ -51,7 +51,7 @@ export function buildPostCompactHandler(
 
 			log.debug(`PostCompact: searching SM with query "${query.slice(0, 80)}"`)
 
-		const threshold = _cfg.postCompactThreshold ?? DEFAULT_POST_COMPACT_THRESHOLD
+			const threshold = _cfg.postCompactThreshold ?? DEFAULT_POST_COMPACT_THRESHOLD
 			// PostCompact searches root only — it doesn't know which topic
 			// container is relevant, and the last user message provides enough
 			// context for SM to find the right memories in root.

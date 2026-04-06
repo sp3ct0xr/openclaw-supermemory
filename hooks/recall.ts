@@ -223,7 +223,7 @@ function formatContainerMetadata(
 		"- **Searching**: Pass containerTag matching the topic — root is automatically included alongside it. Example: user asks about crypto → search with containerTag='crypto' (searches crypto + root). Omitting containerTag searches root only.",
 	)
 	lines.push(
-		"- **Storing**: Pass containerTag matching the topic when storing. Example: storing a crypto fact → containerTag='crypto'. Omitting containerTag stores to root.",
+		"- **Storing**: General facts and preferences → omit containerTag (stores to root). Specific domain details like research findings, technical analysis, or deep knowledge → pass containerTag. Example: 'User trades crypto' → root. 'BTC funding rate is -0.05% on Hyperliquid' → containerTag='crypto'.",
 	)
 	lines.push(
 		"- Profile, settings, and auto-recall use root by default — no containerTag needed.",
