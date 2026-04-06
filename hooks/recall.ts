@@ -14,6 +14,32 @@ export function clearProfileCache(): void {
 	profileCacheEntry = null
 }
 
+/** Set the profile cache externally (e.g., from SessionStart warmup). */
+export function setProfileCache(data: ProfileResult, ttlMs: number): void {
+	profileCacheEntry = { data, expiresAt: Date.now() + ttlMs }
+}
+
+// ── Over-personalization guard (P2 item #9) ──
+// Lightweight keyword overlap check — no LLM call, no external deps
+const STOPWORDS = new Set(["the","a","an","is","are","was","were","be","been","have","has","had","do","does","did","will","would","could","should","may","might","can","i","you","he","she","it","we","they","my","your","his","her","its","our","their","this","that","what","which","who","how","when","where","why","not","no","yes","to","of","in","for","on","with","at","by","from","as","or","and","but","if","so","just","about","up","out","all","get","got","go","going","make","know","think","want","need","use","try","tell","me","some","like","also","more","very","much","than","then","now","here","there","only","well","way","too","any","each","every","both","few","many","most","own","same","other","new","old","big","small","long","little","right","still","back","even","give","day","say","said","see","look","come","take","put","over","such","after","year","work","first","last","down","been","made","find","found","good","great","help","thing","things","being","using","please","thanks","thank","sure","really","actually","already"])
+
+function extractKeywords(text: string): Set<string> {
+	return new Set(
+		text.toLowerCase().split(/\W+/).filter(w => w.length > 2 && !STOPWORDS.has(w)),
+	)
+}
+
+function hasProfileOverlap(query: string, profile: ProfileResult): boolean {
+	const queryWords = extractKeywords(query)
+	if (queryWords.size === 0) return true // empty/trivial query → always inject
+	const profileText = [...profile.static, ...profile.dynamic].join(" ")
+	const profileWords = extractKeywords(profileText)
+	for (const w of queryWords) {
+		if (profileWords.has(w)) return true
+	}
+	return false
+}
+
 function formatRelativeTime(isoTimestamp: string): string {
 	try {
 		const dt = new Date(isoTimestamp)
@@ -236,9 +262,19 @@ export function buildRecallHandler(
 				profileCacheEntry = { data: profile, expiresAt: now + ttl }
 			}
 
+			// Over-personalization guard (P2 item #9):
+			// Skip profile injection when conversation topic has no overlap with profile content
+			let shouldInjectProfile = includeProfile
+			if (shouldInjectProfile && !isNewSession && query) {
+				if (!hasProfileOverlap(query, profile)) {
+					log.debug("recall: skipping profile — no topic overlap with user message")
+					shouldInjectProfile = false
+				}
+			}
+
 			const memoryContext = formatContext(
-				includeProfile ? profile.static : [],
-				includeProfile ? profile.dynamic : [],
+				shouldInjectProfile ? profile.static : [],
+				shouldInjectProfile ? profile.dynamic : [],
 				[], // search results no longer auto-injected — agents use supermemory_search actively
 				cfg.maxRecallResults,
 			)

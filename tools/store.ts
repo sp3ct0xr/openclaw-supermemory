@@ -33,6 +33,12 @@ export function registerStoreTool(
 							"Mark as permanent identity trait (name, hometown, core preferences). Permanent memories are never auto-forgotten by Supermemory. Default: false.",
 					}),
 				),
+				direct: Type.Optional(
+					Type.Boolean({
+						description:
+							"Use direct v4 memory creation for immediate searchability (bypasses document pipeline). Best for explicit facts the user states directly. Auto-detected when omitted.",
+					}),
+				),
 				eventDate: Type.Optional(
 					Type.String({
 						description:
@@ -52,6 +58,7 @@ export function registerStoreTool(
 					text: string
 					category?: string
 					permanent?: boolean
+					direct?: boolean
 					eventDate?: string
 					containerTag?: string
 				},
@@ -69,11 +76,54 @@ export function registerStoreTool(
 					cfg.categoryRouting,
 				)
 
-				log.debug(
-					`store tool: category="${category}" customId="${customId}" containerTag="${routedTag}" eventDate="${params.eventDate ?? "none"}"`,
+				// Auto-detect direct mode: short explicit facts (preference/fact/entity) use v4 direct
+				const useDirect = params.direct ?? (
+					["preference", "fact", "entity"].includes(category) &&
+					params.text.length < 500
 				)
 
-				// Dedup-aware: search for similar memory, update if found
+				log.debug(
+					`store tool: category="${category}" direct=${useDirect} customId="${customId}" containerTag="${routedTag}" eventDate="${params.eventDate ?? "none"}"`,
+				)
+
+				const preview =
+					params.text.length > 80
+						? `${params.text.slice(0, 80)}…`
+						: params.text
+
+				// v4 Direct path: immediate searchability, bypasses document pipeline
+				if (useDirect) {
+					try {
+						const directResult = await client.createMemoryDirect({
+							content: params.text,
+							containerTag: routedTag,
+							isStatic: params.permanent ?? false,
+							metadata: {
+								type: category,
+								source: "openclaw_tool",
+								documentDate: now,
+							},
+							temporalContext: {
+								documentDate: now,
+								...(params.eventDate && { eventDate: [params.eventDate] }),
+							},
+						})
+						const staticLabel = directResult.isStatic ? " ⊛" : ""
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Stored (instant): "${preview}" [${category}]${staticLabel}`,
+								},
+							],
+						}
+					} catch (err) {
+						// Fallback to pipeline path if v4 direct fails
+						log.warn("store: v4 direct creation failed, falling back to pipeline", err)
+					}
+				}
+
+				// Pipeline path: dedup-aware, goes through SM extraction pipeline
 				const result = await client.addOrUpdateMemory({
 					content: params.text,
 					category,
@@ -89,10 +139,6 @@ export function registerStoreTool(
 					entityContext: cfg.entityContext,
 				})
 
-				const preview =
-					params.text.length > 80
-						? `${params.text.slice(0, 80)}…`
-						: params.text
 				const actionLabel =
 					result.action === "updated"
 						? `Updated (v${result.version})`

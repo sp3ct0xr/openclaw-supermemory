@@ -11,7 +11,7 @@ import {
 	buildSessionBuffer,
 	type SessionBuffer,
 } from "./hooks/capture.ts"
-import { buildRecallHandler } from "./hooks/recall.ts"
+import { buildRecallHandler, setProfileCache } from "./hooks/recall.ts"
 import { initLogger } from "./logger.ts"
 import { initPathGuard } from "./utils/path-guard.ts"
 import { buildMemoryRuntime, buildPromptSection } from "./runtime.ts"
@@ -23,6 +23,8 @@ import { registerDocumentsTool } from "./tools/documents.ts"
 import { registerIngestTool } from "./tools/ingest.ts"
 import { registerSettingsTool } from "./tools/settings.ts"
 import { registerUpdateTool } from "./tools/update.ts"
+import { registerTimelineTool } from "./tools/timeline.ts"
+import { buildPostCompactHandler } from "./hooks/post-compact.ts"
 
 try {
 	const stateDir =
@@ -58,6 +60,9 @@ export default {
 		}
 
 		const client = new SupermemoryClient(cfg.apiKey, cfg.containerTag)
+		if (cfg.v4FetchTimeoutMs !== 10_000) {
+			client.setV4FetchTimeout(cfg.v4FetchTimeoutMs)
+		}
 
 		let sessionKey: string | undefined
 		const getSessionKey = () => sessionKey
@@ -86,6 +91,7 @@ export default {
 		registerIngestTool(api, client, cfg)
 		registerDocumentsTool(api, client, cfg)
 		registerSettingsTool(api, client, cfg)
+		registerTimelineTool(api, client, cfg)
 
 		// Sync org-level settings from plugin config → Supermemory on startup.
 		// Note: this is one-way (config → server). If settings are changed via
@@ -127,6 +133,21 @@ export default {
 				buildCaptureHandler(client, cfg, getSessionKey, sessionBuffer),
 			)
 		}
+
+		// SessionStart: warm profile cache (P2 item #11)
+		api.on("SessionStart", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {
+			if (ctx?.sessionKey) sessionKey = ctx.sessionKey as string
+			// Fire-and-forget warmup — don't block session start
+			client.getProfile(undefined)
+				.then((profile) => {
+					setProfileCache(profile, cfg.profileCacheTtlMs)
+					api.logger.info("supermemory: SessionStart — profile cache warmed")
+				})
+				.catch(() => {}) // warmup failure is non-critical
+		})
+
+		// PostCompact: re-inject SM memories after context loss (P2 item #8)
+		api.on("PostCompact", buildPostCompactHandler(client, cfg))
 
 		// Flush SM buffer before compaction strips context (P1 item #1)
 		// Prevents data loss when compaction fires before agent_end
