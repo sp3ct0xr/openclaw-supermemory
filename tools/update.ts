@@ -82,7 +82,8 @@ export function registerUpdateTool(
 						1,
 						params.containerTag,
 					)
-					if (results.length === 0) {
+					const topMatch = results[0]
+					if (results.length === 0 || !topMatch) {
 						return {
 							content: [
 								{
@@ -92,8 +93,8 @@ export function registerUpdateTool(
 							],
 						}
 					}
-					targetId = results[0].id
-					targetContent = results[0].content || results[0].memory
+					targetId = topMatch.id
+					targetContent = topMatch.content || topMatch.memory
 					log.debug(
 						`update tool: found memory id="${targetId}" content="${(targetContent ?? "").slice(0, 50)}"`,
 					)
