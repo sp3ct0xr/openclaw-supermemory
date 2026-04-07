@@ -69,23 +69,12 @@ export function buildAfterTurnHandler(
 		})
 
 		// ── Profile cache invalidation ──
-		// If user said something profile-relevant, clear cache so next assemble() gets fresh data
-		const userTexts = newMessages
-			.filter(m => m.role === 'user')
-			.map(m => {
-				if (typeof m.content === 'string') return m.content
-				if (Array.isArray(m.content)) {
-					return m.content
-						.filter((b: Record<string, unknown>) => b.type === 'text')
-						.map((b: Record<string, unknown>) => (b.text as string) ?? '')
-						.join(' ')
-				}
-				return ''
-			})
-			.join(' ')
-		if (PROFILE_TRIGGERS.test(userTexts)) {
+		// Ingestion may cause SM to update the profile server-side (Conversations
+		// API extracts facts automatically). Clear cache after successful ingest
+		// so the next assemble() gets fresh profile data.
+		if (result.ingestedCount > 0) {
 			clearProfileCache()
-			log.debug('CE afterTurn: profile cache invalidated — user statement matched profile triggers')
+			log.debug(`CE afterTurn: profile cache invalidated — ${result.ingestedCount} messages ingested`)
 		}
 
 		// ── Turn metrics ──
