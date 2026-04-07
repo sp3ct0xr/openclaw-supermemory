@@ -115,7 +115,7 @@ export function buildIngestBatchHandler(
 
 			// Mark all messages as ingested
 			tracker.markAllIngested(msgIds)
-			log.debug(`CE ingestBatch: ingested ${params.messages.length} messages (${cfg.useConversationsApi ? "conversations" : "legacy"})`)
+			log.info(`CE ingestBatch: ingested ${params.messages.length} messages (${cfg.useConversationsApi ? "conversations" : "legacy"})`)
 
 			// Recovery: if outage buffer has pending entries, flush them
 			if (!outageBuffer.isEmpty()) {
