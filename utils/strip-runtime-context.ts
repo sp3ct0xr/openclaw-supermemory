@@ -58,6 +58,12 @@ export function stripRuntimeContext(text: string): string {
 		// ── Leading timestamp prefix (inbound-meta.ts) ──
 		.replace(/^\[[A-Za-z]{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\] */gm, "")
 
+		// ── Secrets and sensitive data ──
+		// Strip lines that look like env var assignments with secrets
+		.replace(/^[A-Z_]{2,}(?:_KEY|_SECRET|_TOKEN|_PASSWORD|_API_KEY|_PRIVATE|_CREDENTIAL)\s*=\s*.*$/gm, "[redacted: secret]")
+		// Strip common secret patterns (API keys, tokens, passwords)
+		.replace(/(?:api[_-]?key|secret|token|password|credential|private[_-]?key)\s*[=:]\s*['"]?[^\s'"\n]{8,}['"]?/gi, "[redacted: secret]")
+
 		// ── Clean up whitespace ──
 		.replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "")
 }
