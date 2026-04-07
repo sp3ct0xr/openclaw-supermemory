@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
+import { clearProfileCache, PROFILE_TRIGGERS, PROFILE_RELEVANT_CATEGORIES } from "../hooks/recall.ts"
 import { log } from "../logger.ts"
 import {
 	buildDocumentId,
@@ -112,6 +113,12 @@ export function registerStoreTool(
 								...(params.eventDate && { eventDate: [params.eventDate] }),
 							},
 						})
+						// Invalidate profile cache for profile-relevant categories or content
+						if (PROFILE_RELEVANT_CATEGORIES.has(category) || PROFILE_TRIGGERS.test(params.text)) {
+							clearProfileCache()
+							log.debug('store: profile cache invalidated (direct path) — profile-relevant category or content stored')
+						}
+
 						const staticLabel = directResult.isStatic ? " ⊛" : ""
 						return {
 							content: [
@@ -142,6 +149,12 @@ export function registerStoreTool(
 					containerTag: routedTag,
 					entityContext: cfg.entityContext,
 				})
+
+				// Invalidate profile cache for profile-relevant categories or content
+				if (PROFILE_RELEVANT_CATEGORIES.has(category) || PROFILE_TRIGGERS.test(params.text)) {
+					clearProfileCache()
+					log.debug('store: profile cache invalidated — profile-relevant category or content stored')
+				}
 
 				const actionLabel =
 					result.action === "updated"

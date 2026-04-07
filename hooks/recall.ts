@@ -5,6 +5,13 @@ import { stripInboundMetadata } from "../memory.ts"
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
 import { textSimilarity, RECALL_DEDUP_SIMILARITY_THRESHOLD } from "../utils/text-similarity.ts"
 
+// ── Profile triggers: module-level constant, compiled once ──
+// Used by afterTurn and store to detect profile-relevant user statements
+export const PROFILE_TRIGGERS = /\b(i(?:'m| am)|my name|i live|i moved|i work (?:at|for|as)|i based|i located|i prefer|i switched)\b/i
+
+// Categories that are inherently profile-relevant (invalidate cache on store)
+export const PROFILE_RELEVANT_CATEGORIES = new Set(['preference', 'fact', 'entity', 'correction'])
+
 // ── Profile cache with TTL (P1 item #2) ──
 const DEFAULT_PROFILE_TTL_MS = 60_000 // 60s
 type ProfileCacheEntry = { data: ProfileResult; expiresAt: number }
