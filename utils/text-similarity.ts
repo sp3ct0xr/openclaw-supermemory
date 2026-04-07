@@ -13,6 +13,9 @@ export const DEDUP_SIMILARITY_THRESHOLD = 0.85
 /** Stricter threshold for recall injection dedup (avoid dropping distinct memories) */
 export const RECALL_DEDUP_SIMILARITY_THRESHOLD = 0.90
 
+/** Threshold for smart correction: search-and-replace contradicted memories */
+export const CORRECTION_SIMILARITY_THRESHOLD = 0.75
+
 // ── Helpers ──
 
 /** Strip punctuation and lowercase a string for BoW construction. */
