@@ -144,7 +144,18 @@
 			"assembleThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
 			"profileCacheTtlMs": { "type": "number", "minimum": 0 },
 			"postCompactThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
-			"v4FetchTimeoutMs": { "type": "number", "minimum": 1000 }
+			"v4FetchTimeoutMs": { "type": "number", "minimum": 1000 },
+			"useConversationsApi": { "type": "boolean" },
+			"ingestDebounceCount": { "type": "number", "minimum": 1, "maximum": 10 },
+			"llmAssist": {
+				"type": "object",
+				"properties": {
+					"enabled": { "type": "boolean" },
+					"model": { "type": "string" },
+					"provider": { "type": "string" },
+					"maxTokens": { "type": "number", "minimum": 50, "maximum": 500 }
+				}
+			}
 		},
 		"required": []
 	}
