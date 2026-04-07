@@ -29,6 +29,7 @@ import { buildContextEngine } from "./engine/context-engine.ts"
 import { SearchCache } from "./utils/search-cache.ts"
 import { createLlmCompletion } from "./utils/llm-completion.ts"
 import { stripRuntimeContext } from "./utils/strip-runtime-context.ts"
+import { ResponseCache } from "./utils/response-cache.ts"
 
 try {
 	const stateDir =
@@ -75,8 +76,9 @@ export default {
 		// to invalidate profile + search caches. Set when CE is registered.
 		const mutationRef = { onMutation: undefined as (() => void) | undefined }
 
-		// Search cache lives at plugin scope (not CE scope) so it survives CE disposal between runs
+		// Caches live at plugin scope (not CE scope) so they survive CE disposal between runs
 		const sharedSearchCache = new SearchCache()
+		const sharedResponseCache = new ResponseCache()
 
 		// Session buffer: accumulates turns, flushes as batch
 		const sessionBuffer: SessionBuffer = buildSessionBuffer(
@@ -180,7 +182,7 @@ export default {
 				cfg,
 				api.config,
 			)
-			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache, llmComplete)
+			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache, sharedResponseCache, llmComplete)
 			mutationRef.onMutation = () => engine.onMutation()
 			// Dual registration
 			api.registerContextEngine?.("supermemory-context", () => engine)
