@@ -69,12 +69,30 @@ export function buildAfterTurnHandler(
 		})
 
 		// ── Profile cache invalidation ──
-		// Ingestion may cause SM to update the profile server-side (Conversations
-		// API extracts facts automatically). Clear cache after successful ingest
-		// so the next assemble() gets fresh profile data.
+		// Only clear when the user said something that could change profile facts.
+		// SM server-side may extract new facts from the Conversations API, but
+		// we only invalidate on likely profile-changing statements to avoid
+		// re-fetching profile on every single turn (24h TTL would be useless).
+		// Explicit mutations (store/update/forget tools) are covered separately
+		// by onMutation() → clearProfileCache().
 		if (result.ingestedCount > 0) {
-			clearProfileCache()
-			log.debug(`CE afterTurn: profile cache invalidated — ${result.ingestedCount} messages ingested`)
+			const userTexts = newMessages
+				.filter(m => m.role === 'user')
+				.map(m => {
+					if (typeof m.content === 'string') return m.content
+					if (Array.isArray(m.content)) {
+						return m.content
+							.filter((b: Record<string, unknown>) => b.type === 'text')
+							.map((b: Record<string, unknown>) => (b.text as string) ?? '')
+							.join(' ')
+					}
+					return ''
+				})
+				.join(' ')
+			if (PROFILE_TRIGGERS.test(userTexts)) {
+				clearProfileCache()
+				log.debug('CE afterTurn: profile cache invalidated — user statement matched profile triggers')
+			}
 		}
 
 		// ── Turn metrics ──
