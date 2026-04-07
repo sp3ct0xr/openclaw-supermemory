@@ -1,4 +1,5 @@
 import type { AgentMessage, ContextEngineRuntimeContext } from "openclaw/plugin-sdk"
+import { clearProfileCache } from "../hooks/recall.ts"
 import { log } from "../logger.ts"
 import { estimateMessagesTokens } from "../utils/token-estimation.ts"
 
@@ -66,6 +67,15 @@ export function buildAfterTurnHandler(
 			messages: newMessages,
 			isHeartbeat: params.isHeartbeat,
 		})
+
+		// ── Profile cache invalidation ──
+		// If user said something profile-relevant, clear cache so next assemble() gets fresh data
+		const userTexts = newMessages.filter(m => m.role === 'user').map(m => m.content || '').join(' ')
+		const PROFILE_TRIGGERS = /\b(i(?:'m| am)|my name|i live|i moved|i work|i based|i located|i prefer|i switched|i now)\b/i
+		if (PROFILE_TRIGGERS.test(userTexts)) {
+			clearProfileCache()
+			log.debug('CE afterTurn: profile cache invalidated — user statement matched profile triggers')
+		}
 
 		// ── Turn metrics ──
 		const totalTokens = estimateMessagesTokens(params.messages)
