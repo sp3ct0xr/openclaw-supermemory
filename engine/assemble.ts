@@ -79,19 +79,23 @@ export function buildAssembleHandler(
 			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
 			const queryText = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() || undefined : undefined
 
+			const classification: QueryClassification = classifyQuery(
+				queryText,
+				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
+			)
+
 			// ── Response cache: return full cached result for repeated queries ──
 			if (queryText && responseCache) {
-				const cached = responseCache.get(queryText)
+				const cached = responseCache.get(
+					queryText,
+					params.messages.length,
+					classification.complexity,
+				)
 				if (cached) {
 					log.debug(`CE assemble: response cache hit — returning cached result`)
 					return cached
 				}
 			}
-
-			const classification: QueryClassification = classifyQuery(
-				queryText,
-				cfg.enableCustomContainerTags ? cfg.customContainers : undefined,
-			)
 			const ratios = BUDGET_RATIOS[classification.complexity]
 
 			const budget = params.tokenBudget ?? 128_000
@@ -271,7 +275,7 @@ export function buildAssembleHandler(
 
 			// Cache the assembled result for repeated queries
 			if (queryText && responseCache) {
-				responseCache.set(queryText, result)
+				responseCache.set(queryText, result, params.messages.length, classification.complexity)
 			}
 
 			return result

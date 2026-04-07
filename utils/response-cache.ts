@@ -1,4 +1,5 @@
 import type { AgentMessage, AssembleResult } from "openclaw/plugin-sdk"
+import type { QueryComplexity } from "./query-classifier.ts"
 import { log } from "../logger.ts"
 
 /** Default max entries in the response cache. */
@@ -8,12 +9,16 @@ const DEFAULT_MAX_ENTRIES = 50
 const DEFAULT_TTL_MS = 5 * 60 * 1000
 
 /** Minimum query length to cache (avoids caching trivial inputs). */
-const MIN_QUERY_LENGTH = 10
+const MIN_QUERY_LENGTH = 20
+
+/** Query classifications that should bypass the response cache. */
+const SKIP_CLASSIFICATIONS: ReadonlySet<QueryComplexity> = new Set(["simple", "followup"])
 
 type CacheEntry = {
 	result: AssembleResult
 	timestamp: number
 	hitCount: number
+	messagesLength: number
 }
 
 /**
@@ -49,10 +54,20 @@ export class ResponseCache {
 
 	/**
 	 * Get a cached AssembleResult for an exact (normalized) query match.
-	 * Returns null on miss, stale entry, or if query is too short to cache.
+	 * Returns null on miss, stale entry, classification skip, or if query is too short.
 	 */
-	get(query: string): AssembleResult | null {
+	get(
+		query: string,
+		currentMessagesLength?: number,
+		classification?: QueryComplexity,
+	): AssembleResult | null {
 		if (query.length < MIN_QUERY_LENGTH) return null
+
+		// Skip cache for trivial/followup classifications
+		if (classification && SKIP_CLASSIFICATIONS.has(classification)) {
+			log.debug(`ResponseCache skip: classification="${classification}"`)
+			return null
+		}
 
 		const key = this.buildKey(query)
 		const entry = this.cache.get(key)
@@ -68,6 +83,19 @@ export class ResponseCache {
 			return null
 		}
 
+		// Zone 3 staleness: evict if conversation has grown since cache time
+		if (
+			currentMessagesLength !== undefined &&
+			entry.messagesLength !== currentMessagesLength
+		) {
+			this.cache.delete(key)
+			this.totalMisses++
+			log.debug(
+				`ResponseCache evict (stale Zone 3): key="${key.slice(0, 40)}…" cached=${entry.messagesLength} current=${currentMessagesLength}`,
+			)
+			return null
+		}
+
 		// LRU promotion: move to end
 		this.cache.delete(key)
 		entry.hitCount++
@@ -78,15 +106,24 @@ export class ResponseCache {
 			`ResponseCache hit: key="${key.slice(0, 40)}…" hits=${entry.hitCount} age=${Math.round((Date.now() - entry.timestamp) / 1000)}s`,
 		)
 
-		return entry.result
+		// Shallow-clone to prevent shared object reference mutation
+		return { ...entry.result, messages: [...entry.result.messages] }
 	}
 
 	/**
 	 * Store an AssembleResult in the cache.
-	 * Skips caching for very short queries.
+	 * Skips caching for very short queries or trivial classifications.
 	 */
-	set(query: string, result: AssembleResult): void {
+	set(
+		query: string,
+		result: AssembleResult,
+		messagesLength: number,
+		classification?: QueryComplexity,
+	): void {
 		if (query.length < MIN_QUERY_LENGTH) return
+
+		// Don't cache trivial/followup classifications
+		if (classification && SKIP_CLASSIFICATIONS.has(classification)) return
 
 		const key = this.buildKey(query)
 
@@ -102,6 +139,7 @@ export class ResponseCache {
 			result,
 			timestamp: Date.now(),
 			hitCount: 0,
+			messagesLength,
 		})
 	}
 
