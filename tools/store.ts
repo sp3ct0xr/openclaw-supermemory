@@ -2,7 +2,7 @@ import { Type } from "@sinclair/typebox"
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { clearProfileCache } from "../hooks/recall.ts"
+import { clearProfileCache, PROFILE_TRIGGERS, PROFILE_RELEVANT_CATEGORIES } from "../hooks/recall.ts"
 import { log } from "../logger.ts"
 import {
 	buildDocumentId,
@@ -113,11 +113,10 @@ export function registerStoreTool(
 								...(params.eventDate && { eventDate: [params.eventDate] }),
 							},
 						})
-						// Invalidate profile cache for corrections or profile-relevant content
-						const PROFILE_TRIGGERS_DIRECT = /\b(i(?:'m| am)|my name|i live|i moved|i work|i based|i located|i prefer|i switched|i now)\b/i
-						if (category === 'correction' || PROFILE_TRIGGERS_DIRECT.test(params.text)) {
+						// Invalidate profile cache for profile-relevant categories or content
+						if (PROFILE_RELEVANT_CATEGORIES.has(category) || PROFILE_TRIGGERS.test(params.text)) {
 							clearProfileCache()
-							log.debug('store: profile cache invalidated (direct path) — correction or profile-relevant content stored')
+							log.debug('store: profile cache invalidated (direct path) — profile-relevant category or content stored')
 						}
 
 						const staticLabel = directResult.isStatic ? " ⊛" : ""
@@ -151,11 +150,10 @@ export function registerStoreTool(
 					entityContext: cfg.entityContext,
 				})
 
-				// Invalidate profile cache for corrections or profile-relevant content
-				const PROFILE_TRIGGERS = /\b(i(?:'m| am)|my name|i live|i moved|i work|i based|i located|i prefer|i switched|i now)\b/i
-				if (category === 'correction' || PROFILE_TRIGGERS.test(params.text)) {
+				// Invalidate profile cache for profile-relevant categories or content
+				if (PROFILE_RELEVANT_CATEGORIES.has(category) || PROFILE_TRIGGERS.test(params.text)) {
 					clearProfileCache()
-					log.debug('store: profile cache invalidated — correction or profile-relevant content stored')
+					log.debug('store: profile cache invalidated — profile-relevant category or content stored')
 				}
 
 				const actionLabel =
