@@ -41,9 +41,10 @@ export function buildContextEngine(
 	const searchCache = externalSearchCache ?? new SearchCache()
 	const responseCache = externalResponseCache ?? new ResponseCache()
 
-	// Health probe — check SM connectivity at creation time
+	// Health check — verify SM connectivity via getSettings (validates API key + reachability)
+	// No wasted search call — getSettings is lightweight and confirms auth works
 	client
-		.search("probe", 1)
+		.getSettings()
 		.then(() => {
 			degradedMode.value = false
 			logger.info("supermemory CE: SM connectivity OK")
