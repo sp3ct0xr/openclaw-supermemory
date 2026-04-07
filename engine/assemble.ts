@@ -45,6 +45,7 @@ export function buildAssembleHandler(
 	lastAssembledMemories?: { value: string[] },
 	searchCache?: SearchCache,
 	responseCache?: ResponseCache,
+	lastAssembleQuery?: { value: string },
 ) {
 	return async (params: {
 		sessionId: string
@@ -79,6 +80,11 @@ export function buildAssembleHandler(
 			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
 			const stripped = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() : undefined
 			const queryText = stripped ? extractSearchQuery(stripped) || undefined : undefined
+
+			// Track the query CE used so the search tool can detect duplicates
+			if (lastAssembleQuery && queryText) {
+				lastAssembleQuery.value = queryText
+			}
 
 			const classification: QueryClassification = classifyQuery(
 				queryText,

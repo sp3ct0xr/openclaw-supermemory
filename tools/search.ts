@@ -10,6 +10,7 @@ import type { SupermemoryConfig } from "../config.ts"
 import { log } from "../logger.ts"
 import { stripInboundMetadata } from "../memory.ts"
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
+import { bowSimilarity } from "../utils/text-similarity.ts"
 
 const MS_PER_DAY = 86_400_000
 
@@ -101,10 +102,14 @@ function formatDeepResult(r: DeepSearchResult, i: number): string {
 	return `${i + 1}. [${tag}:${r.id.slice(0, 8)}]${score}${version}${freshness}\n   ${preview}`
 }
 
+/** Threshold above which a tool query is considered a duplicate of the CE assemble query. */
+const CE_DEDUP_THRESHOLD = 0.80
+
 export function registerSearchTool(
 	api: OpenClawPluginApi,
 	client: SupermemoryClient,
 	cfg: SupermemoryConfig,
+	lastAssembleQuery?: { value: string },
 ): void {
 	api.registerTool(
 		{
@@ -174,6 +179,30 @@ export function registerSearchTool(
 				if (!params.query) {
 					return {
 						content: [{ type: "text" as const, text: "Empty query after sanitization." }],
+					}
+				}
+
+				// CE dedup: if CE assemble already searched a near-identical query this turn,
+				// skip the redundant API call and point the agent to injected context.
+				if (lastAssembleQuery?.value && cfg.contextEngine) {
+					const sim = bowSimilarity(params.query, lastAssembleQuery.value)
+					if (sim >= CE_DEDUP_THRESHOLD) {
+						log.debug(
+							`search tool: CE dedup — query "${params.query}" matches CE query ` +
+							`"${lastAssembleQuery.value}" (similarity=${(sim * 100).toFixed(0)}%), skipping`,
+						)
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text:
+										"Relevant memories for this topic were already retrieved and injected into your context " +
+										"by the Context Engine (see [Supermemory: relevant memories for this turn] above). " +
+										"Use those results. Only call supermemory_search again if you need a different query, " +
+										"different filters (after/before dates), or a different containerTag.",
+								},
+							],
+						}
 					}
 				}
 

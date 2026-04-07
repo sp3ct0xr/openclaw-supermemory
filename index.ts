@@ -98,7 +98,9 @@ export default {
 			}
 		})
 
-		registerSearchTool(api, client, cfg)
+		// Shared ref: CE writes the query it used, search tool reads it for dedup
+		const lastAssembleQuery = { value: "" }
+		registerSearchTool(api, client, cfg, lastAssembleQuery)
 		registerStoreTool(api, client, cfg, getSessionKey)
 		registerUpdateTool(api, client, cfg)
 		registerForgetTool(api, client, cfg)
@@ -182,7 +184,7 @@ export default {
 				cfg,
 				api.config,
 			)
-			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache, sharedResponseCache, llmComplete)
+			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache, sharedResponseCache, llmComplete, lastAssembleQuery)
 			mutationRef.onMutation = () => engine.onMutation()
 			// Dual registration
 			api.registerContextEngine?.("supermemory-context", () => engine)

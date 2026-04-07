@@ -29,6 +29,7 @@ export function buildContextEngine(
 	externalSearchCache?: SearchCache,
 	externalResponseCache?: ResponseCache,
 	llmComplete?: LlmCompletionFn,
+	lastAssembleQuery?: { value: string },
 ): ContextEngine & { onMutation: () => void } {
 	// Shared state across all lifecycle methods
 	const tracker = new IngestionTracker()
@@ -69,7 +70,7 @@ export function buildContextEngine(
 	// trimOffset: compact writes how many messages to skip, assemble consumes it
 	const trimOffset = { value: 0 }
 
-	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories, searchCache, responseCache)
+	const assembleHandler = buildAssembleHandler(client, cfg, degradedMode, trimOffset, lastAssembledMemories, searchCache, responseCache, lastAssembleQuery)
 	const compactHandler = buildCompactHandler(cfg, tracker, trimOffset, compactionRecommended)
 	const afterTurnHandler = buildAfterTurnHandler(ingestBatchHandler, {
 		turnCount,
