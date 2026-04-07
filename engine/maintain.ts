@@ -37,6 +37,8 @@ export function buildMaintainHandler(
 		sessionFile: string
 		runtimeContext?: ContextEngineRuntimeContext
 	}): Promise<ContextEngineMaintenanceResult> => {
+		log.info("CE maintain: called")
+
 		const rewrite = params.runtimeContext?.rewriteTranscriptEntries
 		if (typeof rewrite !== "function") {
 			return { changed: false, bytesFreed: 0, rewrittenEntries: 0, reason: "rewriteTranscriptEntries not available" }
