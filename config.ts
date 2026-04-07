@@ -15,8 +15,8 @@ export type SupermemoryConfig = {
 	autoCapture: boolean
 	maxRecallResults: number
 	profileFrequency: number
-	/** TTL in milliseconds for SM profile cache. Default: 60000 (60s).
-	 *  Reduces API calls by caching profile responses between turns. */
+	/** TTL in milliseconds for SM profile cache. Default: 86400000 (24h).
+	 *  Cache is invalidated immediately on mutations (store/update/forget). */
 	profileCacheTtlMs: number
 	/** Minimum similarity threshold for PostCompact SM re-injection. Default: 0.6.
 	 *  Higher = fewer but more relevant memories re-injected after compaction. */
@@ -166,7 +166,7 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		autoCapture: (cfg.autoCapture as boolean) ?? true,
 		maxRecallResults: (cfg.maxRecallResults as number) ?? 10,
 		profileFrequency: (cfg.profileFrequency as number) ?? 50,
-		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 300_000,
+		profileCacheTtlMs: (cfg.profileCacheTtlMs as number) ?? 86_400_000,
 		postCompactThreshold: (cfg.postCompactThreshold as number) ?? 0.6,
 		v4FetchTimeoutMs: (cfg.v4FetchTimeoutMs as number) ?? 10_000,
 		captureMode:

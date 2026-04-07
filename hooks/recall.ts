@@ -13,7 +13,9 @@ export const PROFILE_TRIGGERS = /\b(i(?:'m| am)|my name|i live|i moved|i work (?
 export const PROFILE_RELEVANT_CATEGORIES = new Set(['preference', 'fact', 'entity', 'correction'])
 
 // ── Profile cache with TTL (P1 item #2) ──
-const DEFAULT_PROFILE_TTL_MS = 60_000 // 60s
+// 24h default — profile facts rarely change; cache is invalidated on
+// mutation (store/update/forget) via onMutation() → clearProfileCache().
+const DEFAULT_PROFILE_TTL_MS = 86_400_000 // 24h
 type ProfileCacheEntry = { data: ProfileResult; expiresAt: number }
 let profileCacheEntry: ProfileCacheEntry | null = null
 
