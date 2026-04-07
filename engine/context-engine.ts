@@ -13,6 +13,7 @@ import { buildAfterTurnHandler } from "./after-turn.ts"
 import { buildMaintainHandler } from "./maintain.ts"
 import { buildOnSubagentEndedHandler } from "./subagent.ts"
 import { SearchCache } from "../utils/search-cache.ts"
+import type { LlmCompletionFn } from "../utils/llm-completion.ts"
 
 /**
  * Build the Supermemory context engine.
@@ -25,6 +26,7 @@ export function buildContextEngine(
 	cfg: SupermemoryConfig,
 	logger: { info: (msg: string) => void },
 	externalSearchCache?: SearchCache,
+	llmComplete?: LlmCompletionFn,
 ): ContextEngine & { onMutation: () => void } {
 	// Shared state across all lifecycle methods
 	const tracker = new IngestionTracker()
@@ -70,7 +72,7 @@ export function buildContextEngine(
 		compactionRecommended,
 		lastAssembledMemories,
 	})
-	const maintainHandler = buildMaintainHandler(tracker)
+	const maintainHandler = buildMaintainHandler(tracker, llmComplete)
 	const onSubagentEndedHandler = buildOnSubagentEndedHandler(tracker)
 
 	return {

@@ -25,6 +25,12 @@ declare module "openclaw/plugin-sdk" {
 		registerMemoryFlushPlan?(resolver: any): void
 		/** Register a context engine plugin. Engine ID must match plugins.slots.contextEngine in config. */
 		registerContextEngine?(id: string, factory: ContextEngineFactory): void
+		/** OpenClaw runtime helpers (model auth, agent defaults, etc.) */
+		// biome-ignore lint/suspicious/noExplicitAny: runtime shape varies by OpenClaw version
+		runtime: any
+		/** Current OpenClaw config snapshot */
+		// biome-ignore lint/suspicious/noExplicitAny: config shape varies
+		config: any
 	}
 
 	/** Factory that creates a ContextEngine instance. */

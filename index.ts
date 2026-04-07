@@ -27,6 +27,8 @@ import { registerTimelineTool } from "./tools/timeline.ts"
 import { buildPostCompactHandler } from "./hooks/post-compact.ts"
 import { buildContextEngine } from "./engine/context-engine.ts"
 import { SearchCache } from "./utils/search-cache.ts"
+import { createLlmCompletion } from "./utils/llm-completion.ts"
+import { stripRuntimeContext } from "./utils/strip-runtime-context.ts"
 
 try {
 	const stateDir =
@@ -172,7 +174,13 @@ export default {
 
 		// Register context engine if enabled
 		if (cfg.contextEngine) {
-			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache)
+			// Create LLM completion function if llmAssist is enabled
+			const llmComplete = createLlmCompletion(
+				api.runtime,
+				cfg,
+				api.config,
+			)
+			const engine = buildContextEngine(client, cfg, api.logger, sharedSearchCache, llmComplete)
 			mutationRef.onMutation = () => engine.onMutation()
 			// Dual registration
 			api.registerContextEngine?.("supermemory-context", () => engine)
@@ -197,6 +205,46 @@ export default {
 		api.on("after_tool_call", (event: Record<string, unknown>) => {
 			if (MUTATION_TOOLS.has(event.toolName as string) && !event.error) {
 				mutationRef.onMutation?.()
+			}
+		})
+
+		// tool_result_persist: strip runtime context from tool results at source
+		// Prevents noise from entering the session transcript in the first place
+		api.on("tool_result_persist", (event: Record<string, unknown>) => {
+			const msg = event.message as { role?: string; content?: unknown } | undefined
+			if (!msg?.content) return
+			if (typeof msg.content === "string") {
+				const cleaned = stripRuntimeContext(msg.content).trim()
+				if (cleaned !== msg.content) {
+					return { message: { ...msg, content: cleaned } }
+				}
+			} else if (Array.isArray(msg.content)) {
+				let changed = false
+				const cleaned = (msg.content as Array<{ type: string; text?: string }>).map((block) => {
+					if (block.type === "text" && typeof block.text === "string") {
+						const stripped = stripRuntimeContext(block.text).trim()
+						if (stripped !== block.text) {
+							changed = true
+							return { ...block, text: stripped }
+						}
+					}
+					return block
+				})
+				if (changed) {
+					return { message: { ...msg, content: cleaned } }
+				}
+			}
+		})
+
+		// before_reset: flush SM buffer before session reset to prevent data loss
+		api.on("before_reset", async () => {
+			if (sessionBuffer.pending() > 0) {
+				api.logger.debug(`supermemory: before_reset — flushing ${sessionBuffer.pending()} pending turns`)
+				try {
+					await sessionBuffer.flush()
+				} catch (err) {
+					api.logger.warn(`supermemory: before_reset flush failed: ${err instanceof Error ? err.message : String(err)}`)
+				}
 			}
 		})
 
