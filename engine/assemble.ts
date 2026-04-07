@@ -77,7 +77,8 @@ export function buildAssembleHandler(
 			// ── Classify query for adaptive budget + temporal/container hints ──
 			// Strip runtime context from prompt to avoid searching with internal metadata
 			const rawQuery = params.prompt ?? extractLastUserQuery(params.messages)
-			const queryText = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() || undefined : undefined
+			const stripped = rawQuery ? stripRuntimeContext(stripInboundMetadata(rawQuery)).trim() : undefined
+			const queryText = stripped ? extractSearchQuery(stripped) || undefined : undefined
 
 			const classification: QueryClassification = classifyQuery(
 				queryText,
@@ -335,6 +336,55 @@ function extractLastUserQuery(messages: AgentMessage[]): string | undefined {
 		}
 	}
 	return undefined
+}
+
+/**
+ * Maximum character length for an SM search query.
+ * Long task prompts (e.g. cron instructions) are truncated to this limit
+ * after scaffolding stripping to keep search queries focused.
+ */
+const MAX_SEARCH_QUERY_CHARS = 300
+
+/**
+ * Extract a concise search query from potentially long prompt text.
+ *
+ * After runtime/cron scaffolding is stripped, the remaining text may still be
+ * hundreds of lines of task instructions.  This function distills it to a
+ * short, high-signal search query suitable for SM hybrid search.
+ *
+ * Strategy:
+ *  1. If text is already short enough, return as-is.
+ *  2. Look for an explicit quoted query hint (e.g. query="BTC analysis").
+ *  3. Otherwise take the first N chars of meaningful lines.
+ */
+function extractSearchQuery(text: string): string {
+	if (text.length <= MAX_SEARCH_QUERY_CHARS) return text
+
+	// 1. Check for explicit search query hints inside the prompt
+	//    e.g.  query="BTC crypto market trading analysis"
+	const explicitQuery = text.match(/query\s*=\s*["']([^"']{3,})["']/i)
+	if (explicitQuery?.[1]) {
+		return explicitQuery[1].trim().slice(0, MAX_SEARCH_QUERY_CHARS)
+	}
+
+	// 2. Collect non-empty, non-instruction lines and join them
+	const meaningful = text
+		.split("\n")
+		.map((l) => l.trim())
+		.filter((l) =>
+			l.length >= 5 &&
+			!/^[-*#>|]/.test(l) &&           // skip bullets / headers / blockquotes
+			!/^\d+\.\s/.test(l) &&            // skip numbered lists
+			!/^(?:Note|Keep|Include|Add|Compare|Give|Format|After)\b/i.test(l), // skip imperative instructions
+		)
+
+	const joined = meaningful.join(" ").replace(/\s+/g, " ").trim()
+	if (joined.length > 0) {
+		return joined.slice(0, MAX_SEARCH_QUERY_CHARS).trim()
+	}
+
+	// 3. Fallback: first MAX_SEARCH_QUERY_CHARS of the original text
+	return text.slice(0, MAX_SEARCH_QUERY_CHARS).trim()
 }
 
 /** Trim messages from the start to fit within a token budget, keeping recent messages. */

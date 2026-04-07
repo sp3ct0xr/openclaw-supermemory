@@ -14,6 +14,22 @@
 export function stripRuntimeContext(text: string): string {
 	if (!text) return text
 	return text
+		// ── Cron task scaffolding ──
+		// Prefix: [cron:UUID name]
+		.replace(/^\[cron:[a-f0-9-]+[^\]]*\]\s*/i, "")
+		// STEP N headers (e.g. "STEP 1 — RECALL CONTEXT:")
+		.replace(/^STEP\s+\d+\s*[—–-]\s*[^\n]*$/gm, "")
+		// Fenced code blocks (```lang ... ```)
+		.replace(/```[a-z]*\n[\s\S]*?```/g, "")
+		// Delivery instruction suffix appended by cron runtime
+		.replace(/Return your summary as plain text;[\s\S]*$/m, "")
+		// "Current time:" line injected by cron
+		.replace(/^Current time:.*$/gm, "")
+		// Bullet instructions referencing tool calls ("- Use supermemory_search with...")
+		.replace(/^-\s*Use\s+supermemory_\w+\s+with\b[^\n]*$/gm, "")
+		// Numbered instruction lines ("1. Funding Rate - is it...")
+		.replace(/^\d+\.\s+[A-Z][^\n]{0,200}(?:\?|:)\s*$/gm, "")
+
 		// ── Delimited runtime context (supports nesting via greedy match) ──
 		.replace(/<<<BEGIN_OPENCLAW_INTERNAL_CONTEXT>>>[\s\S]*?<<<END_OPENCLAW_INTERNAL_CONTEXT>>>/g, "")
 
