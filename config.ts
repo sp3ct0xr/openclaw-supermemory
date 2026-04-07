@@ -49,6 +49,17 @@ export type SupermemoryConfig = {
 	useConversationsApi: boolean
 	/** Ingest debounce: batch N turns before sending to SM. Default: 1 (no debounce). */
 	ingestDebounceCount: number
+	/** LLM-assisted features (e.g. smart maintain summarization). */
+	llmAssist: {
+		/** Enable LLM-assisted features. Default: false. */
+		enabled: boolean
+		/** Model ID override. When unset, uses the agent's default model from OpenClaw config. */
+		model?: string
+		/** Provider override. When unset, uses the agent's default provider from OpenClaw config. */
+		provider?: string
+		/** Max tokens for LLM responses. Default: 150. */
+		maxTokens: number
+	}
 }
 
 const ALLOWED_KEYS = [
@@ -74,6 +85,7 @@ const ALLOWED_KEYS = [
 	"assembleThreshold",
 	"useConversationsApi",
 	"ingestDebounceCount",
+	"llmAssist",
 ]
 
 function assertAllowedKeys(
@@ -189,6 +201,17 @@ export function parseConfig(raw: unknown): SupermemoryConfig {
 		assembleThreshold: (cfg.assembleThreshold as number) ?? 0.7,
 		useConversationsApi: (cfg.useConversationsApi as boolean) ?? true,
 		ingestDebounceCount: (cfg.ingestDebounceCount as number) ?? 1,
+		llmAssist: (() => {
+			const raw = cfg.llmAssist && typeof cfg.llmAssist === "object" && !Array.isArray(cfg.llmAssist)
+				? (cfg.llmAssist as Record<string, unknown>)
+				: {}
+			return {
+				enabled: raw.enabled === true,
+				model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : undefined,
+				provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider.trim() : undefined,
+				maxTokens: typeof raw.maxTokens === "number" && Number.isFinite(raw.maxTokens) ? raw.maxTokens : 150,
+			}
+		})(),
 	}
 }
 
@@ -229,6 +252,15 @@ export const supermemoryConfigSchema = {
 			assembleThreshold: { type: "number", minimum: 0, maximum: 1 },
 			useConversationsApi: { type: "boolean" },
 			ingestDebounceCount: { type: "number", minimum: 1, maximum: 10 },
+			llmAssist: {
+				type: "object",
+				properties: {
+					enabled: { type: "boolean" },
+					model: { type: "string" },
+					provider: { type: "string" },
+					maxTokens: { type: "number", minimum: 50, maximum: 500 },
+				},
+			},
 		},
 	},
 	parse: parseConfig,

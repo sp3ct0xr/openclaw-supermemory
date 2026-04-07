@@ -6,6 +6,7 @@ import type {
 } from "openclaw/plugin-sdk"
 import { log } from "../logger.ts"
 import { IngestionTracker } from "../utils/ingestion-tracker.ts"
+import type { LlmCompletionFn } from "../utils/llm-completion.ts"
 
 /** Minimum content length (chars) before a tool_result is eligible for compaction. */
 const COMPACTION_THRESHOLD_CHARS = 2000
@@ -22,7 +23,14 @@ const COMPACTED_PLACEHOLDER = "[compacted: tool output removed to free context]"
  *
  * Safety: only rewrites messages whose turns have been ingested by SM.
  */
-export function buildMaintainHandler(tracker: IngestionTracker) {
+/** System prompt for tool result summarization. */
+const SUMMARIZE_SYSTEM_PROMPT =
+	"Summarize this tool output in one concise line. Include key findings, file names, counts, or results. Be factual, not verbose. Do not use markdown."
+
+export function buildMaintainHandler(
+	tracker: IngestionTracker,
+	llmComplete?: LlmCompletionFn,
+) {
 	return async (params: {
 		sessionId: string
 		sessionKey?: string
@@ -67,11 +75,38 @@ export function buildMaintainHandler(tracker: IngestionTracker) {
 			// Already compacted?
 			if (typeof msg.content === "string" && msg.content.includes("[compacted:")) continue
 
+			// Use LLM to generate a summary if available, otherwise use placeholder
+			let replacement = COMPACTED_PLACEHOLDER
+			if (llmComplete) {
+				try {
+					const contentPreview = typeof msg.content === "string"
+						? msg.content.slice(0, 4000)
+						: Array.isArray(msg.content)
+							? msg.content.filter((b) => b.type === "text").map((b) => (b.text as string) ?? "").join("\n").slice(0, 4000)
+							: ""
+					if (contentPreview) {
+						const summary = await llmComplete(SUMMARIZE_SYSTEM_PROMPT, contentPreview)
+					if (summary) {
+						// Sanitize: enforce single line, remove brackets that could break format
+						const sanitized = summary
+							.replace(/[\r\n]+/g, " ")
+							.replace(/[\[\]]/g, "")
+							.trim()
+							.slice(0, 200)
+						replacement = `[summary: ${sanitized}]`
+							log.info(`CE maintain: LLM summarized tool result (${contentLength} → ${replacement.length} chars)`)
+						}
+					}
+				} catch (err) {
+					log.debug(`CE maintain: LLM summary failed, using placeholder — ${err instanceof Error ? err.message : String(err)}`)
+				}
+			}
+
 			replacements.push({
 				entryId,
 				message: {
 					...msg,
-					content: COMPACTED_PLACEHOLDER,
+					content: replacement,
 				},
 			})
 		}
