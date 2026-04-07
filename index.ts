@@ -148,7 +148,9 @@ export default {
 			)
 		}
 
-		// session_start: warm profile cache (P2 item #11)
+		// session_start: track session key + warm profile cache
+		// When CE is active, bootstrap() also warms the cache — but session_start
+		// fires first, so bootstrap will find the cache warm and skip.
 		api.on("session_start", async (_event: Record<string, unknown>, ctx: Record<string, unknown>) => {
 			if (ctx?.sessionKey) sessionKey = ctx.sessionKey as string
 			// Fire-and-forget warmup — don't block session start

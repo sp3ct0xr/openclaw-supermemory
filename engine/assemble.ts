@@ -128,7 +128,9 @@ export function buildAssembleHandler(
 			try {
 				let profile = getProfileCache()
 				if (!profile) {
-					profile = await client.getProfile(queryText)
+					// Fetch without query param — avoids triggering dynamic search
+					// on every turn. Static profile facts are the same regardless.
+					profile = await client.getProfile(undefined)
 					setProfileCache(profile, cfg.profileCacheTtlMs)
 				}
 

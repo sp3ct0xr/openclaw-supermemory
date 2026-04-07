@@ -1,7 +1,7 @@
 import type { BootstrapResult } from "openclaw/plugin-sdk"
 import type { SupermemoryClient } from "../client.ts"
 import type { SupermemoryConfig } from "../config.ts"
-import { setProfileCache } from "../hooks/recall.ts"
+import { getProfileCache, setProfileCache } from "../hooks/recall.ts"
 import { log } from "../logger.ts"
 
 /**
@@ -21,11 +21,14 @@ export function buildBootstrapHandler(
 		sessionFile: string
 	}): Promise<BootstrapResult> => {
 		try {
-			// Warm profile cache (fire-and-forget pattern, but await here since
-			// bootstrap is not on the critical path)
-			const profile = await client.getProfile(undefined)
-			setProfileCache(profile, cfg.profileCacheTtlMs)
-			log.info("CE bootstrap: profile cache warmed")
+			// Warm profile cache — skip if session_start already warmed it
+			if (getProfileCache()) {
+				log.info("CE bootstrap: profile cache already warm, skipping")
+			} else {
+				const profile = await client.getProfile(undefined)
+				setProfileCache(profile, cfg.profileCacheTtlMs)
+				log.info("CE bootstrap: profile cache warmed")
+			}
 
 			return { bootstrapped: true }
 		} catch (err) {
