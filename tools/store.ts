@@ -11,6 +11,7 @@ import {
 	type MemoryCategory,
 } from "../memory.ts"
 import { stripRuntimeContext } from "../utils/strip-runtime-context.ts"
+import { textSimilarity, CORRECTION_SIMILARITY_THRESHOLD } from "../utils/text-similarity.ts"
 
 export function registerStoreTool(
 	api: OpenClawPluginApi,
@@ -80,6 +81,55 @@ export function registerStoreTool(
 				const now = new Date().toISOString()
 
 				const routedTag = params.containerTag ?? undefined
+
+				// Smart correction: search for contradicted memory and update instead of creating parallel
+				if (category === "correction") {
+					try {
+						const searchResults = await client.search(params.text, 5, routedTag)
+						let bestMatch: { id: string; content: string; similarity: number } | null = null
+
+						for (const result of searchResults) {
+							const sim = textSimilarity(params.text, result.content)
+							if (sim >= CORRECTION_SIMILARITY_THRESHOLD && (!bestMatch || sim > bestMatch.similarity)) {
+								bestMatch = { id: result.id, content: result.content, similarity: sim }
+							}
+						}
+
+						if (bestMatch) {
+							log.debug(
+								`store: correction match found (id=${bestMatch.id}, similarity=${bestMatch.similarity.toFixed(3)}), updating instead of creating`,
+							)
+							const updated = await client.updateMemory({
+								id: bestMatch.id,
+								newContent: params.text,
+								containerTag: routedTag,
+								metadata: {
+									type: category,
+									source: "openclaw_tool",
+									documentDate: new Date().toISOString(),
+								},
+							})
+
+							if (PROFILE_RELEVANT_CATEGORIES.has(category) || PROFILE_TRIGGERS.test(params.text)) {
+								clearProfileCache()
+								log.debug("store: profile cache invalidated — correction updated existing memory")
+							}
+
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: `Corrected (v${updated.version}): "${preview}" [${category}] — replaced memory ${bestMatch.id.slice(0, 8)}… (similarity: ${bestMatch.similarity.toFixed(2)})`,
+									},
+								],
+							}
+						}
+
+						log.debug("store: correction — no similar memory found above threshold, falling through to normal store")
+					} catch (err) {
+						log.warn("store: correction search/update failed, falling through to normal store", err)
+					}
+				}
 
 				// Auto-detect direct mode: short explicit facts (preference/fact/entity) use v4 direct
 				const useDirect = params.direct ?? (
