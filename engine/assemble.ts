@@ -85,7 +85,11 @@ export function buildAssembleHandler(
 			)
 
 			// ── Response cache: return full cached result for repeated queries ──
+			// Repeat-awareness: the cache returns null on 2nd+ repeat to force
+			// a fresh search. We also check repeatCount to inject a hint on 3rd+.
+			let repeatCount = 0
 			if (queryText && responseCache) {
+				repeatCount = responseCache.getRepeatCount(queryText)
 				const cached = responseCache.get(
 					queryText,
 					params.messages.length,
@@ -94,6 +98,9 @@ export function buildAssembleHandler(
 				if (cached) {
 					log.debug(`CE assemble: response cache hit — returning cached result`)
 					return cached
+				}
+				if (repeatCount >= 2) {
+					log.debug(`CE assemble: repeat detected (count=${repeatCount}) — forcing fresh search`)
 				}
 			}
 			const ratios = BUDGET_RATIOS[classification.complexity]
@@ -266,6 +273,19 @@ export function buildAssembleHandler(
 			log.debug(
 				`CE assemble: ${memoryMessages.length > 0 ? memoryMessages.length : "no"} memory msgs, ${recentMessages.length} recent msgs, ${totalTokens} est. tokens`,
 			)
+
+			// ── Repeat-awareness hint: inject on 3rd+ repeat ──
+			if (repeatCount >= 3) {
+				const repeatHint: AgentMessage = {
+					role: "system",
+					content:
+						"[Supermemory: repeat-awareness] User has asked about this topic multiple times — " +
+						"provide a fresh perspective, check for updates, or offer alternative angles. " +
+						"Avoid repeating the same answer verbatim.",
+				}
+				assembled.unshift(repeatHint)
+				log.debug(`CE assemble: injected repeat-awareness hint (repeatCount=${repeatCount})`)
+			}
 
 			const result: AssembleResult = {
 				messages: assembled,

@@ -54,7 +54,15 @@ export class ResponseCache {
 
 	/**
 	 * Get a cached AssembleResult for an exact (normalized) query match.
-	 * Returns null on miss, stale entry, classification skip, or if query is too short.
+	 * Returns null on miss, stale entry, classification skip, if query is too short,
+	 * or if the query has been repeated enough to warrant a fresh search.
+	 *
+	 * Repeat-awareness behavior:
+	 * - 1st hit (hitCount=1): return cached result (normal cache behavior)
+	 * - 2nd+ hit (hitCount>=2): return null to force a fresh search/assemble
+	 *
+	 * The hitCount is still incremented even when null is returned, so callers
+	 * can use getRepeatCount() to check how many times this query has been seen.
 	 */
 	get(
 		query: string,
@@ -106,8 +114,31 @@ export class ResponseCache {
 			`ResponseCache hit: key="${key.slice(0, 40)}…" hits=${entry.hitCount} age=${Math.round((Date.now() - entry.timestamp) / 1000)}s`,
 		)
 
+		// Repeat-awareness: bypass cache on 2nd+ repeat to force fresh results
+		if (entry.hitCount >= 2) {
+			log.debug(
+				`ResponseCache repeat bypass: key="${key.slice(0, 40)}…" hitCount=${entry.hitCount} — forcing fresh search`,
+			)
+			return null
+		}
+
 		// Shallow-clone to prevent shared object reference mutation
 		return { ...entry.result, messages: [...entry.result.messages] }
+	}
+
+	/**
+	 * Get the repeat count for a query without modifying cache state.
+	 * Returns 0 if the query has never been cached.
+	 * Useful for callers (e.g. assemble) to inject repeat-awareness hints.
+	 */
+	getRepeatCount(query: string): number {
+		if (query.length < MIN_QUERY_LENGTH) return 0
+		const key = this.buildKey(query)
+		const entry = this.cache.get(key)
+		if (!entry) return 0
+		// Check TTL — don't report stale entries
+		if (Date.now() - entry.timestamp > this.ttlMs) return 0
+		return entry.hitCount
 	}
 
 	/**
